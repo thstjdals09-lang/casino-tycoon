@@ -23,28 +23,29 @@ export function specialtyMeta(type: SpecialtyType) {
   return SPECIALTY_LABEL[type];
 }
 
-// 등급별 4명씩, 총 16명. N/R/SR/SSR 순으로 효과 수치가 커진다.
+// 뽑기 확률(N 60% / R 28% / SR 10% / SSR 2%)에 맞춰 등급이 희귀할수록 종류 수를 줄였다.
+// N 6종 / R 5종 / SR 3종 / SSR 2종, 총 16명. 흔한 등급은 다양하게, 희귀 등급은 소수정예로.
 export const DEALER_ROSTER: DealerTemplate[] = [
-  // N
+  // N (6종)
   { id: 'n-kim', name: '김대리', grade: 'N', specialty: 'income', specialtyValue: 0.02, flavor: '성실한 신입 딜러. 손이 빠르진 않지만 꾸준하다.' },
+  { id: 'n-kang', name: '강알바', grade: 'N', specialty: 'income', specialtyValue: 0.02, flavor: '주말 알바생이지만 손님 응대는 야무지다.' },
   { id: 'n-park', name: '박신입', grade: 'N', specialty: 'bar', specialtyValue: 0.02, flavor: '틈틈이 바 손님도 챙기는 눈치 빠른 막내.' },
+  { id: 'n-oh2', name: '오연수생', grade: 'N', specialty: 'bar', specialtyValue: 0.02, flavor: '연수 중이지만 칵테일 이름은 다 외웠다.' },
   { id: 'n-lee', name: '이막내', grade: 'N', specialty: 'tap', specialtyValue: 0.02, flavor: '손님 응대가 빠릿빠릿해 팁을 잘 받는다.' },
   { id: 'n-choi', name: '최수습', grade: 'N', specialty: 'gacha', specialtyValue: 0.02, flavor: '인맥 관리 중인 수습. 좋은 딜러를 소개해준다.' },
-  // R
+  // R (5종)
   { id: 'r-jung', name: '정프로', grade: 'R', specialty: 'income', specialtyValue: 0.04, flavor: '카드를 다루는 손놀림이 프로급.' },
+  { id: 'r-seo2', name: '서에이스', grade: 'R', specialty: 'income', specialtyValue: 0.04, flavor: '팀 내에서 에이스로 통하는 실력파.' },
   { id: 'r-han', name: '한베테랑', grade: 'R', specialty: 'bar', specialtyValue: 0.04, flavor: '칵테일 레시피를 줄줄 꿰고 있다.' },
   { id: 'r-oh', name: '오스피드', grade: 'R', specialty: 'tap', specialtyValue: 0.04, flavor: '판을 빨리 돌려 손님 회전율이 좋다.' },
   { id: 'r-yoon', name: '윤스카우터', grade: 'R', specialty: 'gacha', specialtyValue: 0.04, flavor: '업계 발이 넓어 좋은 인재를 물어온다.' },
-  // SR
+  // SR (3종)
   { id: 'sr-seo', name: '서마스터', grade: 'SR', specialty: 'income', specialtyValue: 0.07, flavor: '전국구로 소문난 마스터 딜러.' },
   { id: 'sr-kang', name: '강칵테일', grade: 'SR', specialty: 'bar', specialtyValue: 0.07, flavor: '시그니처 칵테일로 VIP를 사로잡는다.' },
   { id: 'sr-lim', name: '임퀵핸드', grade: 'SR', specialty: 'tap', specialtyValue: 0.07, flavor: '셔플이 예술이라 손님들이 넋을 놓고 본다.' },
-  { id: 'sr-cho', name: '조인맥', grade: 'SR', specialty: 'gacha', specialtyValue: 0.07, flavor: '업계 인맥의 중심. 헤드헌팅 능력자.' },
-  // SSR
+  // SSR (2종)
   { id: 'ssr-hwang', name: '황전설', grade: 'SSR', specialty: 'income', specialtyValue: 0.12, flavor: '한 판만 봐도 전설이라 불리는 이유를 안다.' },
   { id: 'ssr-baek', name: '백소믈리에', grade: 'SSR', specialty: 'bar', specialtyValue: 0.12, flavor: '와인부터 위스키까지, 살아있는 바 사전.' },
-  { id: 'ssr-no', name: '노번개손', grade: 'SSR', specialty: 'tap', specialtyValue: 0.12, flavor: '번개손이라 불리는 역대급 딜링 속도.' },
-  { id: 'ssr-nam', name: '남인맥왕', grade: 'SSR', specialty: 'gacha', specialtyValue: 0.12, flavor: '업계 최고의 마당발. 모르는 사람이 없다.' },
 ];
 
 export function templateById(id: string): DealerTemplate {
