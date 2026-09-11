@@ -8,7 +8,7 @@ import { customerGradeConfig, rollCustomerGrade, type CustomerGrade } from './cu
 import { barIncomePerSecond, barUpgradeCost, designBonusFor, designUpgradeCost, drinkPriceFor } from './decor';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
-const TAP_COOLDOWN_MS = 3000;
+const TAP_COOLDOWN_MS = 2000;
 const TAP_BONUS_SECONDS = 5;
 
 export interface OfflineEarningsResult {
