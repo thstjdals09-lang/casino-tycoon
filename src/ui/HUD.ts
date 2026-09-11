@@ -1,12 +1,12 @@
 import { GameState } from '../game/GameState';
-import { formatCash } from '../game/balance';
+import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { customerGradeConfig } from '../game/customers';
 
-type Tab = 'table' | 'dealer' | 'venue';
+type Tab = 'table' | 'dealer' | 'compendium' | 'venue';
 type OwnedFilter = 'all' | 'owned' | 'unowned';
 type GradeFilter = DealerGrade | 'all';
 
@@ -263,7 +263,20 @@ export class HUD {
       })
       .join('');
 
+    return `
+      <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
+        🎰 딜러 가챠 (${formatCash(nextGachaCost)})
+      </button>
+      ${flash}
+      ${unlockedFlash}
+      <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
+      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2% · 등급별 효과는 도감 탭에서 확인</p>`;
+  }
+
+  private renderCompendiumTab(): string {
+    const gs = this.gameState;
     const pulls = gs.dealerPulls;
+
     const achievementRows = ACHIEVEMENTS.map((a) => {
       const done = gs.achievements.includes(a.id);
       return `
@@ -287,11 +300,16 @@ export class HUD {
       .map((g) => {
         const owned = pulls[g.grade] > 0;
         const colorStyle = owned ? `color:${gradeHex(g.color)}` : 'color:#7a6a5a; filter:grayscale(1);';
+        const exampleLv1 = (1 + 1 * 0.25 * g.levelBonusMultiplier) * g.assignedMultiplier;
         return `
-          <div class="row ${owned ? '' : 'row-unowned'}">
+          <div class="row compendium-row ${owned ? '' : 'row-unowned'}">
             <div class="row-main">
-              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${g.label}] (보유 ${pulls[g.grade]}명)</span>
-              <span class="row-sub">보유효과: 전체수익 +${((g.passiveMultiplier) * 100).toFixed(1)}%/명(누적) · 배치효과: x${g.assignedMultiplier} · 레벨업 배율: x${g.levelBonusMultiplier}</span>
+              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${g.label}] · 보유 ${pulls[g.grade]}명</span>
+            </div>
+            <div class="effect-detail">
+              <div class="effect-line">👜 <b>보유효과</b> (배치 안 해도 적용, 보유 개체수만큼 누적) — 전체 수익 +${(g.passiveMultiplier * 100).toFixed(1)}%p / 명</div>
+              <div class="effect-line">🪑 <b>배치효과</b> (테이블에 배정 시) — 기본 효율 배율 x${g.assignedMultiplier}</div>
+              <div class="effect-line">📈 <b>레벨업 배율</b> — 레벨당 상승폭 x${g.levelBonusMultiplier} (레벨 1 배치 시 대략 x${exampleLv1.toFixed(2)})</div>
             </div>
           </div>`;
       })
@@ -303,15 +321,7 @@ export class HUD {
       `<button class="chip ${this.gradeFilter === f ? 'active' : ''}" data-action="set-grade-filter" data-filter="${f}">${label}</button>`;
 
     return `
-      <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
-        🎰 딜러 가챠 (${formatCash(nextGachaCost)})
-      </button>
-      ${flash}
-      ${unlockedFlash}
-      <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
-      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2%</p>
-
-      <h3 class="section-title">📖 딜러 도감</h3>
+      <h3 class="section-title">📖 딜러 등급 도감</h3>
       <div class="filter-row">
         ${ownedFilterBtn('all', '전체')}${ownedFilterBtn('owned', '보유')}${ownedFilterBtn('unowned', '미보유')}
       </div>
@@ -320,8 +330,7 @@ export class HUD {
       </div>
       <div class="row-list">${gradeCompendium}</div>
 
-      <h3 class="section-title">🏆 업적</h3>
-      <p class="tab-caption">누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR}</p>
+      <h3 class="section-title">🏆 업적 (누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR})</h3>
       <div class="row-list">${achievementRows}</div>`;
   }
 
@@ -395,7 +404,13 @@ export class HUD {
     const gs = this.gameState;
 
     const tabContent =
-      this.tab === 'table' ? this.renderTableTab() : this.tab === 'dealer' ? this.renderDealerTab() : this.renderVenueTab();
+      this.tab === 'table'
+        ? this.renderTableTab()
+        : this.tab === 'dealer'
+        ? this.renderDealerTab()
+        : this.tab === 'compendium'
+        ? this.renderCompendiumTab()
+        : this.renderVenueTab();
 
     // 전체 다시 그리기 전에 스크롤 위치를 저장해뒀다가 그대로 복원 (강화 버튼 눌렀을 때 목록이 맨 위로 튀는 문제 방지).
     // 단, 탭을 새로 전환한 경우엔 새 탭이니 위에서부터 보여준다.
@@ -408,6 +423,7 @@ export class HUD {
 
       <div class="stat-bar">
         <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>
+        <div class="floor-badge">🏢 ${gs.tier.id + 1}/${VENUE_TIERS.length}층</div>
         <div class="income" id="hud-income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
         <button class="settings-btn" data-action="open-settings">⚙️</button>
       </div>
@@ -420,6 +436,9 @@ export class HUD {
         </button>
         <button class="nav-btn ${this.tab === 'dealer' ? 'active' : ''}" data-action="set-tab" data-tab="dealer">
           <span class="nav-icon">🎰</span><span>딜러</span>
+        </button>
+        <button class="nav-btn ${this.tab === 'compendium' ? 'active' : ''}" data-action="set-tab" data-tab="compendium">
+          <span class="nav-icon">📖</span><span>도감</span>
         </button>
         <button class="nav-btn ${this.tab === 'venue' ? 'active' : ''}" data-action="set-tab" data-tab="venue">
           <span class="nav-icon">♦</span><span>매장</span>

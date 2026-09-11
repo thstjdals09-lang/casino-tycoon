@@ -54,9 +54,14 @@ function lighten(color: number, amount: number): number {
 export class MainScene extends Phaser.Scene {
   private layoutContainer!: Phaser.GameObjects.Container;
   private decor!: Phaser.GameObjects.Container;
+  private floorSprite!: Phaser.GameObjects.TileSprite;
   private timeSinceSave = 0;
   private lastTierId = -1;
   private tablePositions = new Map<number, { x: number; y: number }>();
+  private dragStartY = 0;
+  private dragStartScroll = 0;
+  private isDragging = false;
+  private dragDistance = 0;
 
   constructor() {
     super('MainScene');
@@ -66,13 +71,34 @@ export class MainScene extends Phaser.Scene {
     this.buildSharedTextures();
 
     const { width, height } = this.scale;
-    this.add.tileSprite(0, 0, width, height, 'floor-tile').setOrigin(0, 0);
+    const initialTier = gameState.tier;
+    const initialFloorKey = this.ensureFloorTexture(initialTier.id, initialTier.floorColor);
+    this.floorSprite = this.add.tileSprite(0, 0, width, height, initialFloorKey).setOrigin(0, 0);
     this.decor = this.add.container(0, 0);
     this.layoutContainer = this.add.container(0, 0);
 
     this.buildDecor();
     this.rebuildLayout();
     this.scheduleSpeechBubble();
+
+    // 층이 넓어지면(테이블 많아지면) 세로로 드래그해서 둘러볼 수 있게.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.dragStartY = p.y;
+      this.dragStartScroll = this.cameras.main.scrollY;
+      this.isDragging = true;
+      this.dragDistance = 0;
+    });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!this.isDragging || !p.isDown) return;
+      const dy = p.y - this.dragStartY;
+      this.dragDistance = Math.max(this.dragDistance, Math.abs(dy));
+      const maxScroll = Math.max(0, this.cameras.main.getBounds().height - height);
+      const newScroll = Phaser.Math.Clamp(this.dragStartScroll - dy, 0, maxScroll);
+      this.cameras.main.scrollY = newScroll;
+    });
+    this.input.on('pointerup', () => {
+      this.isDragging = false;
+    });
 
     gameEvents.addEventListener('state-changed', () => this.rebuildLayout());
   }
@@ -89,7 +115,6 @@ export class MainScene extends Phaser.Scene {
   }
 
   private buildSharedTextures() {
-    ensurePixelTexture(this, 'floor-tile', floorTileGrid(), { a: '#7a1220', b: '#5c0e18' }, FLOOR_TILE_PX);
     ensurePixelTexture(this, 'chip-decor', chipStackGrid(), { x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0', r: '#c9a227', g: '#3a0f16' }, 6);
 
     const humanoidBase = humanoidGrid('none');
@@ -118,6 +143,13 @@ export class MainScene extends Phaser.Scene {
     // 등급이 오를수록 펠트가 살짝 밝아지는 것만 반영하고, 홀덤 테이블다운 초록+금테를 기본으로 유지.
     const felt = toHex(lighten(0x0b6e4f, tierId * 8));
     ensurePixelTexture(this, key, tableGrid(18, 9), { r: '#c9a227', f: felt, x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0' }, 5);
+    return key;
+  }
+
+  /** 층(매장 티어)마다 바닥 색을 다르게 해서 "다른 층에 있다"는 느낌을 준다. */
+  private ensureFloorTexture(tierId: number, floorColor: number): string {
+    const key = `floor-tile-tier-${tierId}`;
+    ensurePixelTexture(this, key, floorTileGrid(), { a: toHex(lighten(floorColor, 40)), b: toHex(floorColor) }, FLOOR_TILE_PX);
     return key;
   }
 
@@ -179,12 +211,23 @@ export class MainScene extends Phaser.Scene {
 
   private rebuildLayout() {
     const tier = gameState.tier;
-    if (tier.id !== this.lastTierId) {
+    const tierChanged = tier.id !== this.lastTierId;
+    if (tierChanged) {
       this.lastTierId = tier.id;
       this.buildDecor();
+      this.floorSprite.setTexture(this.ensureFloorTexture(tier.id, tier.floorColor));
     }
     this.layoutContainer.removeAll(true);
     this.tablePositions.clear();
+
+    const rows = Math.max(1, Math.ceil(tier.maxTables / COLS));
+    const contentHeight = Math.max(this.scale.height, GRID_TOP + rows * SLOT_H + 40);
+    this.floorSprite.setSize(this.scale.width, contentHeight);
+    this.cameras.main.setBounds(0, 0, this.scale.width, contentHeight);
+    // 층이 바뀌면(확장하면) 스크롤을 맨 위로 되돌려서 새로 생긴 자리를 바로 보여준다.
+    if (tierChanged) this.cameras.main.scrollY = 0;
+
+    // 층 이름은 상단 HUD에 표시되므로(스크롤 시 겹칠 공간이 부족해) 씬 안에는 따로 배너를 넣지 않는다.
 
     // 미니바 매출 라벨 (바 스프라이트는 buildDecor에서 고정 배치, 여기선 숫자만 갱신).
     if (gameState.barLevel > 0) {
@@ -227,7 +270,9 @@ export class MainScene extends Phaser.Scene {
       .rectangle(x, y, 148, 118, 0xffffff, 0.06)
       .setStrokeStyle(2, 0xffffff, 0.25);
     panel.setInteractive({ useHandCursor: true });
-    panel.on('pointerdown', () => this.onTapTable(table.id, x, y));
+    panel.on('pointerup', () => {
+      if (this.dragDistance < 8) this.onTapTable(table.id, x, y);
+    });
 
     const centerX = x;
     const centerY = y + 34;
@@ -298,8 +343,8 @@ export class MainScene extends Phaser.Scene {
 
     if (cost !== null) {
       box.setInteractive({ useHandCursor: true });
-      box.on('pointerdown', () => {
-        if (gameState.buyTable()) emitStateChanged();
+      box.on('pointerup', () => {
+        if (this.dragDistance < 8 && gameState.buyTable()) emitStateChanged();
       });
     }
 

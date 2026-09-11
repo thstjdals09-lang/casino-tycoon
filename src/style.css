@@ -79,6 +79,40 @@ body {
   color: var(--mint);
 }
 
+.floor-badge {
+  font-size: 11px;
+  color: #ffd966;
+  background: #170609;
+  border: 1px solid var(--wood-dark);
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.compendium-row {
+  align-items: flex-start;
+}
+
+.effect-detail {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--wood-dark);
+}
+
+.effect-line {
+  font-size: 10px;
+  color: #d8b98a;
+  line-height: 1.4;
+}
+
+.effect-line b {
+  color: #fff3d6;
+}
+
 .tab-content {
   flex: 1 1 auto;
   min-height: 0;
