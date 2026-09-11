@@ -3,7 +3,9 @@ import { gameState } from '../game/instance';
 import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
-import { ensurePixelTexture, chipStackGrid, floorTileGrid, humanoidGrid, tableGrid } from '../game/pixelart';
+import { customerGradeConfig } from '../game/customers';
+import { ensurePixelTexture, barCounterGrid, chipStackGrid, floorTileGrid, humanoidGrid, tableGrid } from '../game/pixelart';
+import type { TableInstance } from '../game/types';
 
 const SLOT_W = 170;
 const SLOT_H = 130;
@@ -13,7 +15,7 @@ const AUTOSAVE_MS = 10_000;
 const FLOOR_TILE_PX = 6; // floorTileGrid()가 8x8이므로 실제 타일은 48x48
 
 const HUMANOID_PALETTE_BASE = { h: '#2b2320', s: '#f5c9a0', w: '#ffffff', p: '#33415c', b: '#1a1a1a' };
-const CUSTOMER_SHIRTS = ['#e0455c', '#4f8fe0', '#f0a63c', '#8a5cf0'];
+const CUSTOMER_GRADE_IDS = ['C', 'B', 'A', 'S'] as const;
 
 const PLAYER_LINES = [
   '올인!',
@@ -103,9 +105,12 @@ export class MainScene extends Phaser.Scene {
       const color = toHex(gradeConfig(g).color);
       ensurePixelTexture(this, `dealer-${g}`, ACCESSORY_GRID[g], { ...HUMANOID_PALETTE_BASE, v: color, c: '#ffd700', a: '#e0455c' }, 5);
     }
-    CUSTOMER_SHIRTS.forEach((color, i) => {
-      ensurePixelTexture(this, `customer-${i}`, humanoidBase, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
+    CUSTOMER_GRADE_IDS.forEach((g) => {
+      const color = toHex(customerGradeConfig(g).color);
+      const accessory = g === 'S' ? 'hat' : 'none';
+      ensurePixelTexture(this, `customer-${g}`, humanoidGrid(accessory), { ...HUMANOID_PALETTE_BASE, v: color, c: '#ffd700' }, 5);
     });
+    ensurePixelTexture(this, 'bar-counter', barCounterGrid(), { r: '#c9a227', w: '#3a0f16', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0' }, 6);
   }
 
   private ensureTableTexture(tierId: number): string {
@@ -119,12 +124,10 @@ export class MainScene extends Phaser.Scene {
   private buildDecor() {
     this.decor.removeAll(true);
     const { width } = this.scale;
-    const count = Math.max(3, Math.floor(width / 220));
-    for (let i = 0; i < count; i++) {
-      const x = 40 + (i * (width - 80)) / Math.max(1, count - 1);
-      const chip = this.add.image(x, 18, 'chip-decor').setOrigin(0.5, 0);
-      this.decor.add(chip);
-    }
+    const bar = this.add.image(width / 2, 4, 'bar-counter').setOrigin(0.5, 0);
+    const chipLeft = this.add.image(28, 8, 'chip-decor').setOrigin(0.5, 0);
+    const chipRight = this.add.image(width - 28, 8, 'chip-decor').setOrigin(0.5, 0);
+    this.decor.add([bar, chipLeft, chipRight]);
   }
 
   private scheduleSpeechBubble() {
@@ -183,6 +186,18 @@ export class MainScene extends Phaser.Scene {
     this.layoutContainer.removeAll(true);
     this.tablePositions.clear();
 
+    // 미니바 매출 라벨 (바 스프라이트는 buildDecor에서 고정 배치, 여기선 숫자만 갱신).
+    if (gameState.barLevel > 0) {
+      const barLabel = this.add
+        .text(this.scale.width / 2, 46, `🍸 바 Lv.${gameState.barLevel} · +${formatCash(gameState.barIncomePerSecond())}/초`, {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: '#ffe6b3',
+        })
+        .setOrigin(0.5, 0);
+      this.layoutContainer.add(barLabel);
+    }
+
     const tables = gameState.tables;
     const tableTextureKey = this.ensureTableTexture(tier.id);
     const startX = (this.scale.width - Math.min(tier.maxTables, COLS) * SLOT_W) / 2 + SLOT_W / 2;
@@ -203,10 +218,10 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private drawActiveTable(x: number, y: number, table: { id: number; level: number }, tableTextureKey: string) {
+  private drawActiveTable(x: number, y: number, table: TableInstance, tableTextureKey: string) {
     this.tablePositions.set(table.id, { x, y });
-    const dealer = gameState.dealerFor(table as never);
-    const income = gameState.tableIncomePerSecond(table as never);
+    const dealer = gameState.dealerFor(table);
+    const income = gameState.tableIncomePerSecond(table);
 
     const panel = this.add
       .rectangle(x, y, 148, 118, 0xffffff, 0.06)
@@ -226,10 +241,17 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    // 딜러가 있는(=손님이 착석하는) 테이블에만 손님 스프라이트가 앉는다.
-    const customerImg = dealer
-      ? this.add.image(x + 16, y + 52, `customer-${table.id % CUSTOMER_SHIRTS.length}`).setOrigin(0.5, 1).setScale(0.9)
-      : null;
+    // 딜러가 있는(=손님이 착석하는) 테이블에만 손님 스프라이트가 앉는다. 등급은 매장 디자인 레벨에 따라 결정됨.
+    const custGrade = table.customerGrade;
+    let customerImg: Phaser.GameObjects.Image | null = null;
+    let customerSparkle: Phaser.GameObjects.Text | null = null;
+    if (dealer && custGrade) {
+      customerImg = this.add.image(x + 16, y + 52, `customer-${custGrade}`).setOrigin(0.5, 1).setScale(0.9);
+      if (custGrade === 'S') {
+        customerSparkle = this.add.text(x + 24, y + 24, '✨', { fontSize: '12px' }).setOrigin(0.5);
+        this.tweens.add({ targets: customerSparkle, alpha: 0.2, duration: 650, yoyo: true, repeat: -1 });
+      }
+    }
 
     const levelText = this.add
       .text(x, y - 44, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '14px', color: '#fff8ec' })
@@ -249,6 +271,7 @@ export class MainScene extends Phaser.Scene {
 
     const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, levelText, incomeText];
     if (customerImg) items.push(customerImg);
+    if (customerSparkle) items.push(customerSparkle);
     if (dealerImg) items.push(dealerImg);
     if (gradeText) items.push(gradeText);
     if (sparkle) items.push(sparkle);

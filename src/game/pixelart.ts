@@ -115,6 +115,20 @@ export function chipStackGrid(): PixelGrid {
   ];
 }
 
+/** 미니바 카운터 (병 + 카운터). width 16 x height 10. */
+export function barCounterGrid(): PixelGrid {
+  return [
+    fillRow(16, '.', { 3: 'x', 6: 'y', 9: 'z', 12: 'x' }), // 병들
+    fillRow(16, '.', { 3: 'x', 6: 'y', 9: 'z', 12: 'x' }),
+    fillRow(16, 'w'), // 선반
+    fillRow(16, '.'),
+    fillRow(16, 'r', { 0: '.', 15: '.' }),
+    fillRow(16, 'r', { 0: '.', 15: '.' }),
+    fillRow(16, 'r'),
+    fillRow(16, 'r'),
+  ];
+}
+
 export function ensurePixelTexture(
   scene: Phaser.Scene,
   key: string,

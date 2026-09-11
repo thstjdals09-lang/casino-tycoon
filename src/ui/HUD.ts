@@ -1,11 +1,14 @@
 import { GameState } from '../game/GameState';
 import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
-import { gradeConfig } from '../game/gacha';
+import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
+import { customerGradeConfig } from '../game/customers';
 
 type Tab = 'table' | 'dealer' | 'venue';
+type OwnedFilter = 'all' | 'owned' | 'unowned';
+type GradeFilter = DealerGrade | 'all';
 
 function gradeHex(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
@@ -15,6 +18,8 @@ export class HUD {
   private root: HTMLElement;
   private gameState: GameState;
   private tab: Tab = 'table';
+  private ownedFilter: OwnedFilter = 'all';
+  private gradeFilter: GradeFilter = 'all';
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -30,8 +35,6 @@ export class HUD {
   /**
    * 매 틱(250ms)마다 호출되는 가벼운 갱신. 잔고처럼 계속 바뀌는 숫자와
    * 버튼 활성/비활성만 갱신하고 DOM 구조는 절대 다시 그리지 않는다.
-   * (select 드롭다운이 열려 있는 도중에 innerHTML을 통째로 갈아치우면
-   * 드롭다운이 열리자마자 닫혀버리는 문제가 있었음 — 그래서 분리함.)
    */
   refresh(): void {
     const gs = this.gameState;
@@ -64,6 +67,16 @@ export class HUD {
       this.render();
       return;
     }
+    if (action === 'set-owned-filter' && btn.dataset.filter) {
+      this.ownedFilter = btn.dataset.filter as OwnedFilter;
+      this.render();
+      return;
+    }
+    if (action === 'set-grade-filter' && btn.dataset.filter) {
+      this.gradeFilter = btn.dataset.filter as GradeFilter;
+      this.render();
+      return;
+    }
 
     let changed = false;
     switch (action) {
@@ -84,6 +97,12 @@ export class HUD {
         break;
       case 'choose-job':
         if (btn.dataset.job) changed = this.gameState.chooseJob(btn.dataset.job);
+        break;
+      case 'upgrade-design':
+        changed = this.gameState.upgradeDesign();
+        break;
+      case 'upgrade-bar':
+        changed = this.gameState.upgradeBar();
         break;
     }
     if (changed) {
@@ -139,11 +158,17 @@ export class HUD {
               `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level})</option>`
           )
           .join('');
+        const custBadge = t.customerGrade
+          ? (() => {
+              const c = customerGradeConfig(t.customerGrade!);
+              return `<span class="cust-badge" style="color:${gradeHex(c.color)}">👤 ${c.label}</span>`;
+            })()
+          : '';
 
         return `
           <div class="row">
             <div class="row-main">
-              <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level}</span>
+              <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level} ${custBadge}</span>
               <span class="row-sub">${formatCash(income)}/초</span>
             </div>
             <select data-action="assign-dealer" data-id="${t.id}">
@@ -162,7 +187,7 @@ export class HUD {
         + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
       </button>
       <div class="row-list">${rows}</div>
-      <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables})</p>`;
+      <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
   }
 
   private renderDealerTab(): string {
@@ -211,6 +236,32 @@ export class HUD {
         </div>`;
     }).join('');
 
+    // 등급별 효과 도감: 보유(pulls>0)면 컬러, 미보유면 무채색.
+    const gradeCompendium = DEALER_GRADES.filter((g) => this.gradeFilter === 'all' || this.gradeFilter === g.grade)
+      .filter((g) => {
+        const owned = pulls[g.grade] > 0;
+        if (this.ownedFilter === 'owned') return owned;
+        if (this.ownedFilter === 'unowned') return !owned;
+        return true;
+      })
+      .map((g) => {
+        const owned = pulls[g.grade] > 0;
+        const colorStyle = owned ? `color:${gradeHex(g.color)}` : 'color:#7a6a5a; filter:grayscale(1);';
+        return `
+          <div class="row ${owned ? '' : 'row-unowned'}">
+            <div class="row-main">
+              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${g.label}] (보유 ${pulls[g.grade]}명)</span>
+              <span class="row-sub">보유효과: 전체수익 +${((g.passiveMultiplier) * 100).toFixed(1)}%/명(누적) · 배치효과: x${g.assignedMultiplier} · 레벨업 배율: x${g.levelBonusMultiplier}</span>
+            </div>
+          </div>`;
+      })
+      .join('');
+
+    const ownedFilterBtn = (f: OwnedFilter, label: string) =>
+      `<button class="chip ${this.ownedFilter === f ? 'active' : ''}" data-action="set-owned-filter" data-filter="${f}">${label}</button>`;
+    const gradeFilterBtn = (f: GradeFilter, label: string) =>
+      `<button class="chip ${this.gradeFilter === f ? 'active' : ''}" data-action="set-grade-filter" data-filter="${f}">${label}</button>`;
+
     return `
       <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
         🎰 딜러 가챠 (${formatCash(nextGachaCost)})
@@ -221,6 +272,15 @@ export class HUD {
       <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2%</p>
 
       <h3 class="section-title">📖 딜러 도감</h3>
+      <div class="filter-row">
+        ${ownedFilterBtn('all', '전체')}${ownedFilterBtn('owned', '보유')}${ownedFilterBtn('unowned', '미보유')}
+      </div>
+      <div class="filter-row">
+        ${gradeFilterBtn('all', '등급 전체')}${gradeFilterBtn('N', 'N')}${gradeFilterBtn('R', 'R')}${gradeFilterBtn('SR', 'SR')}${gradeFilterBtn('SSR', 'SSR')}
+      </div>
+      <div class="row-list">${gradeCompendium}</div>
+
+      <h3 class="section-title">🏆 업적</h3>
       <p class="tab-caption">누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR}</p>
       <div class="row-list">${achievementRows}</div>`;
   }
@@ -236,12 +296,28 @@ export class HUD {
         ? `<div class="job-path">전직: ${path.map((id) => JOBS.find((j) => j.id === id)?.name ?? id).join(' → ')}</div>`
         : '<div class="job-path">아직 전직 전</div>';
 
+    const designCost = gs.designUpgradeCost();
+    const barCost = gs.barUpgradeCost();
+
     return `
       <div class="venue-card">
         <h2>${tier.name}</h2>
         <p>${tier.description}</p>
         ${jobPathHtml}
       </div>
+
+      <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
+      <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다.</p>
+      <button class="big-action design" data-action="upgrade-design" data-cost="${designCost}" ${gs.cash < designCost ? 'disabled' : ''}>
+        🖼️ 인테리어 업그레이드 (${formatCash(designCost)})
+      </button>
+
+      <h3 class="section-title">🍸 미니바 (Lv.${gs.barLevel})</h3>
+      <p class="tab-caption">${gs.barLevel > 0 ? `현재 음료 가격 ${formatCash(gs.drinkPrice())} · 초당 매출 ${formatCash(gs.barIncomePerSecond())}` : '아직 바가 없습니다. 업그레이드하면 음료 판매를 시작합니다.'}</p>
+      <button class="big-action bar" data-action="upgrade-bar" data-cost="${barCost}" ${gs.cash < barCost ? 'disabled' : ''}>
+        🍹 바 업그레이드 (${formatCash(barCost)})
+      </button>
+
       <div class="advance-block">
         ${
           jobsBlocking
@@ -253,7 +329,7 @@ export class HUD {
             <div class="advance-progress-bar" id="advance-bar" style="width:${Math.min(100, (gs.cash / advanceCost) * 100)}%"></div>
           </div>
           <button class="advance-btn" data-action="advance-venue" data-cost="${advanceCost}" ${gs.canAdvanceVenue() ? '' : 'disabled'}>
-            🏗️ 매장 확장 (${formatCash(advanceCost)})
+            🏗️ 매장 확장 (${formatCash(advanceCost)}) · 확장 시 인테리어/바 레벨 초기화
           </button>`
         }
       </div>`;

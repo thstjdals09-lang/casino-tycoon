@@ -1,8 +1,8 @@
 import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
-const STORAGE_KEY = 'casino-tycoon-save-v3';
-const SAVE_VERSION = 3;
+const STORAGE_KEY = 'casino-tycoon-save-v4';
+const SAVE_VERSION = 4;
 
 export function createNewSave(): GameSaveData {
   return {
@@ -11,7 +11,7 @@ export function createNewSave(): GameSaveData {
     cash: 0,
     totalEarned: 0,
     prestigeMultiplier: 1,
-    tables: [{ id: 0, level: 1, dealerId: null, lastTapAt: 0 }],
+    tables: [{ id: 0, level: 1, dealerId: null, lastTapAt: 0, customerGrade: null }],
     dealers: [],
     nextTableId: 1,
     nextDealerId: 0,
@@ -19,6 +19,8 @@ export function createNewSave(): GameSaveData {
     jobPath: [],
     dealerPulls: emptyPullCounts(),
     achievements: [],
+    designLevel: 0,
+    barLevel: 0,
   };
 }
 

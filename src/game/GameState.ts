@@ -4,12 +4,12 @@ import { createNewSave, loadSave, persistSave } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
+import { customerGradeConfig, rollCustomerGrade, type CustomerGrade } from './customers';
+import { barIncomePerSecond, barUpgradeCost, designBonusFor, designUpgradeCost, drinkPriceFor } from './decor';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 3000;
 const TAP_BONUS_SECONDS = 5;
-/** 딜러가 배정돼 손님이 착석하면 붙는 추가 수익 배율. */
-const CUSTOMER_SEATED_BONUS = 1.15;
 
 export interface OfflineEarningsResult {
   elapsedMs: number;
@@ -24,6 +24,7 @@ export interface GachaResult {
 export class GameState {
   private data: GameSaveData;
   private lastGacha: GachaResult | null = null;
+  private lastUnlockedAchievements: AchievementConfig[] = [];
 
   constructor() {
     this.data = loadSave() ?? createNewSave();
@@ -69,14 +70,20 @@ export class GameState {
     return this.data.achievements;
   }
 
-  achievementList(): AchievementConfig[] {
-    return ACHIEVEMENTS;
-  }
-
-  private lastUnlockedAchievements: AchievementConfig[] = [];
-
   get lastUnlocked(): AchievementConfig[] {
     return this.lastUnlockedAchievements;
+  }
+
+  get designLevel(): number {
+    return this.data.designLevel;
+  }
+
+  get barLevel(): number {
+    return this.data.barLevel;
+  }
+
+  achievementList(): AchievementConfig[] {
+    return ACHIEVEMENTS;
   }
 
   jobMultipliers(): JobMultipliers {
@@ -99,20 +106,69 @@ export class GameState {
     return this.data.dealers.find((d) => d.id === table.dealerId) ?? null;
   }
 
+  customerGradeFor(table: TableInstance): CustomerGrade | null {
+    return table.customerGrade;
+  }
+
   tableIncomePerSecond(table: TableInstance): number {
     const tier = this.tier;
     const dealer = this.dealerFor(table);
     const base = tier.tableBaseIncome * tableLevelMultiplier(tier, table.level);
     const jobs = this.jobMultipliers();
-    // 딜러가 배정된 테이블만 전직의 딜러 효율 보너스 + 손님 착석 보너스를 받는다.
-    const dealerMult =
-      dealer !== null ? dealerMultiplier(tier, dealer) * jobs.dealerEff * CUSTOMER_SEATED_BONUS : dealerMultiplier(tier, null);
+    if (dealer === null) {
+      return base * dealerMultiplier(tier, null) * this.data.prestigeMultiplier;
+    }
+    const customerMult = table.customerGrade ? customerGradeConfig(table.customerGrade).spendMultiplier : 1;
+    const dealerMult = dealerMultiplier(tier, dealer) * jobs.dealerEff * customerMult;
     return base * dealerMult * this.data.prestigeMultiplier;
+  }
+
+  /** 착석한 손님들의 drinkMultiplier 합 (바 매출 계산용). */
+  private seatedDrinkMultiplierSum(): number {
+    return this.data.tables.reduce((sum, t) => {
+      if (!t.customerGrade) return sum;
+      return sum + customerGradeConfig(t.customerGrade).drinkMultiplier;
+    }, 0);
+  }
+
+  barIncomePerSecond(): number {
+    return barIncomePerSecond(this.data.barLevel, this.seatedDrinkMultiplierSum());
+  }
+
+  drinkPrice(): number {
+    return drinkPriceFor(this.data.barLevel);
+  }
+
+  designUpgradeCost(): number {
+    return designUpgradeCost(this.data.designLevel);
+  }
+
+  barUpgradeCost(): number {
+    return barUpgradeCost(this.data.barLevel);
+  }
+
+  upgradeDesign(): boolean {
+    const cost = this.designUpgradeCost();
+    if (this.data.cash < cost) return false;
+    this.data.cash -= cost;
+    this.data.designLevel += 1;
+    return true;
+  }
+
+  upgradeBar(): boolean {
+    const cost = this.barUpgradeCost();
+    if (this.data.cash < cost) return false;
+    this.data.cash -= cost;
+    this.data.barLevel += 1;
+    return true;
   }
 
   totalIncomePerSecond(): number {
     const raw = this.data.tables.reduce((sum, t) => sum + this.tableIncomePerSecond(t), 0);
-    return raw * collectionMultiplier(this.data.dealers) * this.jobMultipliers().income * achievementMultiplier(this.data.achievements);
+    const jobsIncome = this.jobMultipliers().income;
+    const tableIncome = raw * collectionMultiplier(this.data.dealers) * jobsIncome * achievementMultiplier(this.data.achievements);
+    const barIncome = this.barIncomePerSecond() * jobsIncome;
+    return tableIncome + barIncome;
   }
 
   nextTableCost(): number | null {
@@ -152,7 +208,7 @@ export class GameState {
     const cost = this.nextTableCost();
     if (cost === null || this.data.cash < cost) return false;
     this.data.cash -= cost;
-    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, lastTapAt: 0 });
+    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, lastTapAt: 0, customerGrade: null });
     return true;
   }
 
@@ -201,7 +257,10 @@ export class GameState {
 
     if (dealer.assignedTableId !== null) {
       const prevTable = this.data.tables.find((t) => t.id === dealer.assignedTableId);
-      if (prevTable) prevTable.dealerId = null;
+      if (prevTable) {
+        prevTable.dealerId = null;
+        prevTable.customerGrade = null;
+      }
     }
 
     if (tableId !== null) {
@@ -212,6 +271,8 @@ export class GameState {
         if (otherDealer) otherDealer.assignedTableId = null;
       }
       table.dealerId = dealer.id;
+      // 딜러가 새로 배정되면 매장 디자인 레벨에 따라 손님 등급을 새로 뽑는다.
+      table.customerGrade = rollCustomerGrade(designBonusFor(this.data.designLevel));
     }
 
     dealer.assignedTableId = tableId;
@@ -235,10 +296,12 @@ export class GameState {
     this.data.prestigeMultiplier *= tier.advanceBonusMultiplier;
     this.data.venueTierIndex += 1;
     this.data.cash = 0;
-    this.data.tables = [{ id: 0, level: 1, dealerId: null, lastTapAt: 0 }];
+    this.data.tables = [{ id: 0, level: 1, dealerId: null, lastTapAt: 0, customerGrade: null }];
     this.data.dealers = [];
     this.data.nextTableId = 1;
     this.data.nextDealerId = 0;
+    this.data.designLevel = 0;
+    this.data.barLevel = 0;
     return true;
   }
 
