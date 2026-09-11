@@ -114,9 +114,16 @@ export class HUD {
   private onChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     if (target.dataset.action !== 'assign-dealer') return;
-    const dealerId = Number(target.dataset.id);
-    const tableId = target.value === '' ? null : Number(target.value);
-    this.gameState.assignDealer(dealerId, tableId);
+    // select의 data-id는 "테이블" id, value는 선택된 "딜러" id — 반대로 읽으면 조용히 실패한다.
+    const tableId = Number(target.dataset.id);
+    const dealerId = target.value === '' ? null : Number(target.value);
+    if (dealerId === null) {
+      // "딜러 없음" 선택 시: 이 테이블에 배정돼 있던 딜러가 있으면 해제.
+      const current = this.gameState.dealers.find((d) => d.assignedTableId === tableId);
+      if (current) this.gameState.assignDealer(current.id, null);
+    } else {
+      this.gameState.assignDealer(dealerId, tableId);
+    }
     this.gameState.save();
     emitStateChanged();
   }
