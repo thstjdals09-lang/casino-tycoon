@@ -13,7 +13,30 @@ const AUTOSAVE_MS = 10_000;
 const FLOOR_TILE_PX = 6; // floorTileGrid()가 8x8이므로 실제 타일은 48x48
 
 const HUMANOID_PALETTE_BASE = { h: '#2b2320', s: '#f5c9a0', w: '#ffffff', p: '#33415c', b: '#1a1a1a' };
-const CUSTOMER_SHIRTS = ['#e0455c', '#4f8fe0', '#f0a63c'];
+const CUSTOMER_SHIRTS = ['#e0455c', '#4f8fe0', '#f0a63c', '#8a5cf0'];
+
+const PLAYER_LINES = [
+  '올인!',
+  '풀하우스 떴다!',
+  '블러핑 아니지...?',
+  '레이즈 갈게요',
+  '체크만 할게요',
+  '플러시 메이드!',
+  '스트레이트다!',
+  '이번 판은 접을게요',
+  '탑페어인데 어쩌지',
+  '콜!',
+  '에이스 페어 떴어요',
+  '이번엔 감이 좋아요',
+  '포커페이스 유지 중',
+  '숏스택이라 불안하네',
+  '너무 좋은 패인데?',
+  '이건 무조건 콜이지',
+  '카드 좀 빨리 주세요',
+  '쿼드 나올 것 같아',
+  '킥커 싸움이네',
+  '베팅 사이즈가 무섭다',
+];
 
 function toHex(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
@@ -29,9 +52,9 @@ function lighten(color: number, amount: number): number {
 export class MainScene extends Phaser.Scene {
   private layoutContainer!: Phaser.GameObjects.Container;
   private decor!: Phaser.GameObjects.Container;
-  private ambientCustomers: Phaser.GameObjects.Image[] = [];
   private timeSinceSave = 0;
   private lastTierId = -1;
+  private tablePositions = new Map<number, { x: number; y: number }>();
 
   constructor() {
     super('MainScene');
@@ -46,8 +69,8 @@ export class MainScene extends Phaser.Scene {
     this.layoutContainer = this.add.container(0, 0);
 
     this.buildDecor();
-    this.spawnAmbientCustomers();
     this.rebuildLayout();
+    this.scheduleSpeechBubble();
 
     gameEvents.addEventListener('state-changed', () => this.rebuildLayout());
   }
@@ -96,25 +119,51 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private spawnAmbientCustomers() {
-    this.ambientCustomers.forEach((c) => c.destroy());
-    this.ambientCustomers = [];
-    const { width, height } = this.scale;
-    const y = height - 24;
-    for (let i = 0; i < 2; i++) {
-      const key = `customer-${i % CUSTOMER_SHIRTS.length}`;
-      const startX = 60 + i * 120;
-      const img = this.add.image(startX, y, key).setOrigin(0.5, 1);
-      this.ambientCustomers.push(img);
-      this.tweens.add({
-        targets: img,
-        x: width - 60 - i * 80,
-        duration: 6000 + i * 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
+  private scheduleSpeechBubble() {
+    const delay = Phaser.Math.Between(3000, 6500);
+    this.time.delayedCall(delay, () => {
+      this.showRandomSpeechBubble();
+      this.scheduleSpeechBubble();
+    });
+  }
+
+  private showRandomSpeechBubble() {
+    const occupiedIds = gameState.tables.map((t) => t.id);
+    if (occupiedIds.length === 0) return;
+    const tableId = Phaser.Utils.Array.GetRandom(occupiedIds);
+    const pos = this.tablePositions.get(tableId);
+    if (!pos) return;
+    const line = Phaser.Utils.Array.GetRandom(PLAYER_LINES);
+    this.spawnSpeechBubble(pos.x, pos.y - 20, line);
+  }
+
+  private spawnSpeechBubble(x: number, y: number, text: string) {
+    const label = this.add
+      .text(x, y, text, { fontFamily: 'monospace', fontSize: '11px', color: '#2a0d13' })
+      .setOrigin(0.5);
+    const pad = 6;
+    const bubble = this.add
+      .rectangle(x, y, label.width + pad * 2, label.height + pad * 1.4, 0xfff3d6, 0.95)
+      .setStrokeStyle(2, 0xc9a227, 1);
+    const tail = this.add.triangle(x, y + label.height / 2 + pad * 0.7 + 4, 0, 0, 8, 0, 4, 6, 0xfff3d6, 0.95);
+
+    bubble.setDepth(10);
+    tail.setDepth(10);
+    label.setDepth(11);
+
+    this.tweens.add({
+      targets: [bubble, tail, label],
+      y: '-=18',
+      alpha: 0,
+      duration: 2200,
+      delay: 1200,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        bubble.destroy();
+        tail.destroy();
+        label.destroy();
+      },
+    });
   }
 
   private rebuildLayout() {
@@ -124,6 +173,7 @@ export class MainScene extends Phaser.Scene {
       this.buildDecor();
     }
     this.layoutContainer.removeAll(true);
+    this.tablePositions.clear();
 
     const tables = gameState.tables;
     const tableTextureKey = this.ensureTableTexture(tier.id);
@@ -146,6 +196,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawActiveTable(x: number, y: number, table: { id: number; level: number }, tableTextureKey: string) {
+    this.tablePositions.set(table.id, { x, y });
     const dealer = gameState.dealerFor(table as never);
     const income = gameState.tableIncomePerSecond(table as never);
 
@@ -159,8 +210,12 @@ export class MainScene extends Phaser.Scene {
 
     let dealerImg: Phaser.GameObjects.Image | null = null;
     if (dealer) {
-      dealerImg = this.add.image(x, y + 6, `dealer-${dealer.grade}`).setOrigin(0.5, 1);
+      dealerImg = this.add.image(x - 14, y + 6, `dealer-${dealer.grade}`).setOrigin(0.5, 1);
     }
+
+    // 모든 활성 테이블에는 게임을 하는 손님이 앉아 있다 (딜러 유무와 무관).
+    const customerKey = `customer-${table.id % CUSTOMER_SHIRTS.length}`;
+    const customerImg = this.add.image(x + 16, y + 52, customerKey).setOrigin(0.5, 1).setScale(0.9);
 
     const levelText = this.add
       .text(x, y - 44, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '14px', color: '#fff8ec' })
@@ -178,7 +233,7 @@ export class MainScene extends Phaser.Scene {
           .setOrigin(0.5)
       : null;
 
-    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, levelText, incomeText];
+    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, customerImg, levelText, incomeText];
     if (dealerImg) items.push(dealerImg);
     if (gradeText) items.push(gradeText);
     this.layoutContainer.add(items);
