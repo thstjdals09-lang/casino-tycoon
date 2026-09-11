@@ -11,6 +11,8 @@ import { rollTemplate, templateById, type SpecialtyType } from './dealerRoster';
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 2000;
 const TAP_BONUS_SECONDS = 5;
+const MISSION_TARGETS = { tap: 10, pull: 3, upgrade: 5 } as const;
+const MISSION_REWARD_SECONDS = { tap: 30, pull: 60, upgrade: 45 } as const;
 
 export interface OfflineEarningsResult {
   elapsedMs: number;
@@ -35,6 +37,7 @@ export class GameState {
   // 부스트(황금시간)는 세이브하지 않는 일시적 상태.
   private boostActiveUntil = 0;
   private boostCooldownUntil = 0;
+  private autoManageAccumulator = 0;
 
   constructor() {
     this.data = loadSave() ?? createNewSave();
@@ -96,6 +99,40 @@ export class GameState {
     return this.data.loginStreak;
   }
 
+  get autoUpgradeEnabled(): boolean {
+    return this.data.autoUpgradeEnabled;
+  }
+
+  toggleAutoUpgrade(): void {
+    this.data.autoUpgradeEnabled = !this.data.autoUpgradeEnabled;
+  }
+
+  get missionProgress() {
+    return this.data.missionProgress;
+  }
+
+  get missionClaimed() {
+    return this.data.missionClaimed;
+  }
+
+  missionTarget(type: 'tap' | 'pull' | 'upgrade'): number {
+    return MISSION_TARGETS[type];
+  }
+
+  missionReward(type: 'tap' | 'pull' | 'upgrade'): number {
+    return this.totalIncomePerSecond() * MISSION_REWARD_SECONDS[type];
+  }
+
+  claimMission(type: 'tap' | 'pull' | 'upgrade'): boolean {
+    if (this.data.missionClaimed[type]) return false;
+    if (this.data.missionProgress[type] < MISSION_TARGETS[type]) return false;
+    const reward = this.missionReward(type);
+    this.data.cash += reward;
+    this.data.totalEarned += reward;
+    this.data.missionClaimed[type] = true;
+    return true;
+  }
+
   isBoostActive(): boolean {
     return Date.now() < this.boostActiveUntil;
   }
@@ -138,6 +175,8 @@ export class GameState {
 
     this.data.loginStreak = isConsecutive ? this.data.loginStreak + 1 : 1;
     this.data.lastLoginDate = today;
+    this.data.missionProgress = { tap: 0, pull: 0, upgrade: 0 };
+    this.data.missionClaimed = { tap: false, pull: false, upgrade: false };
 
     const cappedStreak = Math.min(this.data.loginStreak, 7);
     const reward = this.totalIncomePerSecond() * 60 * (1 + cappedStreak * 0.15) + 20 * cappedStreak;
@@ -309,6 +348,7 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     table.level += 1;
+    this.data.missionProgress.upgrade += 1;
     return true;
   }
 
@@ -323,6 +363,7 @@ export class GameState {
     const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, templateId: template.id, assignedTableId: null };
     this.data.dealers.push(dealer);
     this.data.dealerPulls[grade] += 1;
+    this.data.missionProgress.pull += 1;
 
     const newly = checkNewAchievements(this.data.dealerPulls, this.data.achievements);
     this.lastUnlockedAchievements = newly.map((id) => ACHIEVEMENTS.find((a) => a.id === id)!).filter(Boolean);
@@ -340,6 +381,7 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     dealer.level += 1;
+    this.data.missionProgress.upgrade += 1;
     return true;
   }
 
@@ -379,6 +421,7 @@ export class GameState {
     const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS * this.jobMultipliers().tap * this.specialtyMultiplier('tap');
     this.data.cash += bonus;
     this.data.totalEarned += bonus;
+    this.data.missionProgress.tap += 1;
     return bonus;
   }
 
@@ -394,10 +437,47 @@ export class GameState {
     return true;
   }
 
-  tick(deltaSeconds: number): void {
+  /** 자동 업그레이드 on일 때 여유 자금으로 테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드를 자동으로 수행. 가챠와 매장 확장은 제외(재미/의사결정 요소라 수동으로 남김). */
+  private autoManage(): void {
+    if (!this.data.autoUpgradeEnabled) return;
+
+    let tableCost = this.nextTableCost();
+    while (tableCost !== null && this.data.cash >= tableCost) {
+      this.buyTable();
+      tableCost = this.nextTableCost();
+    }
+
+    for (let guard = 0; guard < 100; guard++) {
+      const cheapest = [...this.data.tables].sort((a, b) => this.tableUpgradeCost(a) - this.tableUpgradeCost(b))[0];
+      if (!cheapest || this.data.cash < this.tableUpgradeCost(cheapest)) break;
+      this.upgradeTable(cheapest.id);
+    }
+
+    for (let guard = 0; guard < 100; guard++) {
+      const cheapest = [...this.data.dealers].sort((a, b) => this.dealerUpgradeCost(a) - this.dealerUpgradeCost(b))[0];
+      if (!cheapest || this.data.cash < this.dealerUpgradeCost(cheapest)) break;
+      this.upgradeDealer(cheapest.id);
+    }
+
+    for (let guard = 0; guard < 50 && this.data.cash >= this.designUpgradeCost(); guard++) this.upgradeDesign();
+    for (let guard = 0; guard < 50 && this.data.cash >= this.barUpgradeCost(); guard++) this.upgradeBar();
+  }
+
+  /** deltaSeconds만큼 수익을 누적하고, 반환값이 true면 자동 업그레이드가 실제로 실행된 틱이라 화면을 다시 그려야 한다. */
+  tick(deltaSeconds: number): boolean {
     const earned = this.totalIncomePerSecond() * deltaSeconds;
     this.data.cash += earned;
     this.data.totalEarned += earned;
+
+    this.autoManageAccumulator += deltaSeconds;
+    if (this.autoManageAccumulator >= 1) {
+      this.autoManageAccumulator = 0;
+      if (this.data.autoUpgradeEnabled) {
+        this.autoManage();
+        return true;
+      }
+    }
+    return false;
   }
 
   consumeOfflineEarnings(): OfflineEarningsResult {

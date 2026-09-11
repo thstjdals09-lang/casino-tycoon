@@ -123,7 +123,8 @@ export class MainScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number) {
     const dt = deltaMs / 1000;
-    gameState.tick(dt);
+    const autoManaged = gameState.tick(dt);
+    if (autoManaged) emitStateChanged();
 
     this.timeSinceSave += deltaMs;
     if (this.timeSinceSave >= AUTOSAVE_MS) {
@@ -450,6 +451,7 @@ export class MainScene extends Phaser.Scene {
   private onTapTable(tableId: number, x: number, y: number) {
     const bonus = gameState.tapTable(tableId);
     if (bonus <= 0) return;
+    emitStateChanged();
 
     const floatText = this.add
       .text(x, y - 50, `+${formatCash(bonus)}`, {

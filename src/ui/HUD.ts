@@ -158,6 +158,13 @@ export class HUD {
           window.location.reload();
         }
         return;
+      case 'toggle-auto':
+        this.gameState.toggleAutoUpgrade();
+        changed = true;
+        break;
+      case 'claim-mission':
+        if (btn.dataset.mission) changed = this.gameState.claimMission(btn.dataset.mission as 'tap' | 'pull' | 'upgrade');
+        break;
     }
     if (changed) {
       this.gameState.save();
@@ -392,6 +399,37 @@ export class HUD {
       <div class="row-list">${achievementRows}</div>`;
   }
 
+  private renderMissions(): string {
+    const gs = this.gameState;
+    const defs: Array<{ type: 'tap' | 'pull' | 'upgrade'; label: string; icon: string }> = [
+      { type: 'tap', label: '테이블 탭하기', icon: '👆' },
+      { type: 'pull', label: '딜러 가챠 뽑기', icon: '🎰' },
+      { type: 'upgrade', label: '강화하기(테이블+딜러)', icon: '💪' },
+    ];
+    const rows = defs
+      .map((d) => {
+        const progress = gs.missionProgress[d.type];
+        const target = gs.missionTarget(d.type);
+        const claimed = gs.missionClaimed[d.type];
+        const done = progress >= target;
+        const pct = Math.min(100, (progress / target) * 100);
+        return `
+          <div class="row mission-row">
+            <div class="row-main">
+              <span class="row-title">${d.icon} ${d.label} (${Math.min(progress, target)}/${target})</span>
+              <div class="mission-bar"><div class="mission-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+            <button data-action="claim-mission" data-mission="${d.type}" ${done && !claimed ? '' : 'disabled'}>
+              ${claimed ? '완료 ✅' : `수령 (+${formatCash(gs.missionReward(d.type))})`}
+            </button>
+          </div>`;
+      })
+      .join('');
+    return `
+      <h3 class="section-title">📋 오늘의 미션</h3>
+      <div class="row-list">${rows}</div>`;
+  }
+
   private renderVenueTab(): string {
     const gs = this.gameState;
     const tier = gs.tier;
@@ -412,6 +450,8 @@ export class HUD {
         <p>${tier.description}</p>
         ${jobPathHtml}
       </div>
+
+      ${this.renderMissions()}
 
       <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
       <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다. Lv.3 화분, Lv.6 액자, Lv.10 샹들리에가 매장에 추가돼요.</p>
@@ -469,11 +509,16 @@ export class HUD {
 
   private renderSettingsModal(): string {
     if (!this.settingsOpen) return '';
+    const gs = this.gameState;
     return `
       <div class="job-modal">
         <div class="job-modal-inner">
           <h2>⚙️ 설정</h2>
           <div class="job-cards">
+            <button class="chip auto-toggle ${gs.autoUpgradeEnabled ? 'active' : ''}" data-action="toggle-auto">
+              🤖 자동 업그레이드: ${gs.autoUpgradeEnabled ? '켜짐' : '꺼짐'}
+            </button>
+            <p class="tab-caption" style="text-align:left">여유 자금이 생기면 테이블 구매/강화, 딜러 강화, 인테리어·바 업그레이드를 자동으로 처리합니다. (가챠와 매장 확장은 재미 요소라 직접 눌러야 해요)</p>
             <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>
           </div>
           <button class="close-settings-btn" data-action="close-settings">닫기</button>

@@ -66,4 +66,10 @@ export interface GameSaveData {
   lastLoginDate: string;
   /** 연속 출석일수. */
   loginStreak: number;
+  /** 자동 업그레이드(테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드) on/off. */
+  autoUpgradeEnabled: boolean;
+  /** 오늘(lastLoginDate 기준) 누적한 일일 미션 진행도. */
+  missionProgress: { tap: number; pull: number; upgrade: number };
+  /** 오늘 이미 수령한 일일 미션. */
+  missionClaimed: { tap: boolean; pull: boolean; upgrade: boolean };
 }
