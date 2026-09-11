@@ -5,7 +5,6 @@ import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { customerGradeConfig } from '../game/customers';
-import { resetSave } from '../game/SaveManager';
 
 type Tab = 'table' | 'dealer' | 'venue';
 type OwnedFilter = 'all' | 'owned' | 'unowned';
@@ -22,6 +21,7 @@ export class HUD {
   private ownedFilter: OwnedFilter = 'all';
   private gradeFilter: GradeFilter = 'all';
   private suppressScrollRestore = false;
+  private settingsOpen = false;
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -64,6 +64,16 @@ export class HUD {
     const action = btn.dataset.action;
     const id = btn.dataset.id !== undefined ? Number(btn.dataset.id) : undefined;
 
+    if (action === 'open-settings') {
+      this.settingsOpen = true;
+      this.render();
+      return;
+    }
+    if (action === 'close-settings') {
+      this.settingsOpen = false;
+      this.render();
+      return;
+    }
     if (action === 'set-tab' && btn.dataset.tab) {
       this.tab = btn.dataset.tab as Tab;
       this.suppressScrollRestore = true;
@@ -109,7 +119,7 @@ export class HUD {
         break;
       case 'reset-game':
         if (window.confirm('정말 초기화할까요? 현금/테이블/딜러/전직/도감이 전부 사라지고 처음부터 다시 시작합니다.')) {
-          resetSave();
+          this.gameState.resetGame();
           window.location.reload();
         }
         return;
@@ -354,9 +364,21 @@ export class HUD {
             🏗️ 다음 층으로 확장 (${formatCash(advanceCost)}) · 테이블/딜러/인테리어/바 그대로 유지
           </button>`
         }
-      </div>
+      </div>`;
+  }
 
-      <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>`;
+  private renderSettingsModal(): string {
+    if (!this.settingsOpen) return '';
+    return `
+      <div class="job-modal">
+        <div class="job-modal-inner">
+          <h2>⚙️ 설정</h2>
+          <div class="job-cards">
+            <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>
+          </div>
+          <button class="close-settings-btn" data-action="close-settings">닫기</button>
+        </div>
+      </div>`;
   }
 
   private render(): void {
@@ -372,10 +394,12 @@ export class HUD {
 
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
+      ${this.renderSettingsModal()}
 
       <div class="stat-bar">
         <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>
         <div class="income" id="hud-income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
+        <button class="settings-btn" data-action="open-settings">⚙️</button>
       </div>
 
       <div class="tab-content">${tabContent}</div>

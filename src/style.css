@@ -325,6 +325,19 @@ select {
   color: #ff8f8f;
 }
 
+.settings-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  padding: 2px 6px;
+}
+
+.close-settings-btn {
+  width: 100%;
+  margin-top: 10px;
+  background: #5a4023;
+}
+
 /* ---- 하단 탭 네비게이션 ---- */
 .bottom-nav {
   flex: 0 0 auto;

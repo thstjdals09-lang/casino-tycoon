@@ -1,6 +1,6 @@
 import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig } from './types';
 import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
-import { createNewSave, loadSave, persistSave } from './SaveManager';
+import { createNewSave, loadSave, persistSave, resetSave } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
@@ -25,6 +25,7 @@ export class GameState {
   private data: GameSaveData;
   private lastGacha: GachaResult | null = null;
   private lastUnlockedAchievements: AchievementConfig[] = [];
+  private autoSaveDisabled = false;
 
   constructor() {
     this.data = loadSave() ?? createNewSave();
@@ -319,7 +320,17 @@ export class GameState {
   }
 
   save(): void {
+    if (this.autoSaveDisabled) return;
     this.data.lastSavedAt = Date.now();
     persistSave(this.data);
+  }
+
+  /**
+   * 전체 초기화. beforeunload 시 자동저장이 지워진 세이브를 다시 덮어쓰지 않도록
+   * autoSaveDisabled를 켠 뒤 스토리지를 지운다. 호출 후 페이지를 새로고침해야 반영된다.
+   */
+  resetGame(): void {
+    this.autoSaveDisabled = true;
+    resetSave();
   }
 }
