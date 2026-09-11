@@ -1,16 +1,18 @@
-/** 디자인(인테리어) 업그레이드 1회 비용. */
+/** 디자인(인테리어) 업그레이드 1회 비용. 후반으로 갈수록 가팔라지도록 레벨이 오를수록 성장률 자체도 조금씩 커진다. */
 export function designUpgradeCost(currentLevel: number): number {
-  return Math.round(300 * Math.pow(1.55, currentLevel));
+  const growth = 1.6 + currentLevel * 0.01;
+  return Math.round(300 * Math.pow(growth, currentLevel));
 }
 
-/** 디자인 레벨이 손님 등급 확률에 주는 보너스(0~). rollCustomerGrade의 designBonus로 사용. */
+/** 디자인 레벨이 손님 등급 확률에 주는 보너스(0~). 로그형으로 완만해져서 무한히 찍어도 무한정 좋아지진 않는다. */
 export function designBonusFor(level: number): number {
-  return level * 0.09;
+  return Math.log2(level + 1) * 0.35;
 }
 
-/** 미니바 업그레이드 1회 비용. */
+/** 미니바 업그레이드 1회 비용. 후반으로 갈수록 가팔라짐. */
 export function barUpgradeCost(currentLevel: number): number {
-  return Math.round(500 * Math.pow(1.7, currentLevel));
+  const growth = 1.75 + currentLevel * 0.012;
+  return Math.round(500 * Math.pow(growth, currentLevel));
 }
 
 /** 바 레벨에 따른 음료 1잔 가격 (레벨이 오를수록 더 비싼 음료를 판매). */

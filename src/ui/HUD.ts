@@ -198,7 +198,7 @@ export class HUD {
         return `
           <div class="row">
             <div class="row-main">
-              <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level} ${custBadge}</span>
+              <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level}${t.level > 0 && t.level % 10 === 0 ? ' ⭐' : ''} ${custBadge}</span>
               <span class="row-sub">${formatCash(income)}/초</span>
             </div>
             <div class="row-details">

@@ -254,7 +254,11 @@ export class MainScene extends Phaser.Scene {
     }
 
     const levelText = this.add
-      .text(x, y - 44, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '14px', color: '#fff8ec' })
+      .text(x, y - 44, `Lv.${table.level}${table.level > 0 && table.level % 10 === 0 ? ' ⭐' : ''}`, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        color: '#fff8ec',
+      })
       .setOrigin(0.5);
     const incomeText = this.add
       .text(x, y + 48, `${formatCash(income)}/초`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffe6b3' })
