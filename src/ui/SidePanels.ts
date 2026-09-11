@@ -39,7 +39,7 @@ export class SidePanels {
     }
     const timer = this.rightRoot.querySelector('#side-boost-timer');
     if (timer) {
-      timer.textContent = String(gs.isBoostActive() ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining());
+      timer.textContent = `${gs.isBoostActive() ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining()}초`;
     }
   }
 
@@ -113,14 +113,16 @@ export class SidePanels {
     const boostReady = gs.canActivateBoost();
 
     this.rightRoot.innerHTML = `
-      <button class="side-btn ${gs.autoUpgradeEnabled ? 'active' : ''}" data-action="toggle-auto" title="자동 업그레이드">
-        🤖
+      <button class="side-btn ${gs.autoUpgradeEnabled ? 'active' : ''}" data-action="toggle-auto">
+        <span class="side-btn-icon">🤖</span>
+        <span class="side-btn-label">자동${gs.autoUpgradeEnabled ? ' ON' : ' OFF'}</span>
       </button>
-      <button class="side-btn ${boostActive ? 'active' : ''} ${boostReady && !boostActive ? 'boost-ready' : ''}" data-action="activate-boost" ${boostReady ? '' : 'disabled'} title="황금시간(수익 2배)">
-        🔥
+      <button class="side-btn ${boostActive ? 'active' : ''} ${boostReady && !boostActive ? 'boost-ready' : ''}" data-action="activate-boost" ${boostReady ? '' : 'disabled'}>
+        <span class="side-btn-icon">🔥</span>
+        <span class="side-btn-label">${boostActive ? '부스트 중' : boostReady ? '부스트' : '대기중'}</span>
         ${
           boostActive || !boostReady
-            ? `<span class="side-btn-timer" id="side-boost-timer">${boostActive ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining()}</span>`
+            ? `<span class="side-btn-timer" id="side-boost-timer">${boostActive ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining()}초</span>`
             : ''
         }
       </button>
@@ -131,8 +133,9 @@ export class SidePanels {
     );
 
     this.leftRoot.innerHTML = `
-      <button class="side-btn" data-action="toggle-event-modal" title="이벤트 · 출석">
-        🎁
+      <button class="side-btn" data-action="toggle-event-modal">
+        <span class="side-btn-icon">🎁</span>
+        <span class="side-btn-label">이벤트</span>
         ${missionReady ? '<span class="side-btn-dot"></span>' : ''}
       </button>
     `;

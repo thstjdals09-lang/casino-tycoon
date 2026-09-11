@@ -437,45 +437,64 @@ select {
 /* ---- 게임 화면 우측 고정 액션 패널 ---- */
 #side-actions {
   position: absolute;
-  right: 10px;
+  right: clamp(4px, 1.5vw, 12px);
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(6px, 1.5vw, 10px);
   z-index: 15;
+  max-width: 22vw;
 }
 
 #side-actions-left {
   position: absolute;
-  left: 10px;
+  left: clamp(4px, 1.5vw, 12px);
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(6px, 1.5vw, 10px);
   z-index: 15;
+  max-width: 22vw;
 }
 
 .side-btn {
   position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 100%;
+  min-width: 40px;
+  border-radius: 999px;
   background: #170609;
   border: 2px solid var(--wood-dark);
   color: #fff3d6;
-  font-size: 20px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  gap: 1px;
+  padding: clamp(4px, 1.2vw, 8px) clamp(3px, 1vw, 6px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.side-btn .side-btn-icon {
+  font-size: clamp(14px, 3.6vw, 20px);
+  line-height: 1;
+}
+
+.side-btn .side-btn-label {
+  font-size: clamp(7px, 1.9vw, 10px);
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .side-btn.active {
   border-color: var(--gold);
   background: #3a1018;
+}
+
+.side-btn.active .side-btn-label {
+  color: var(--gold);
+  font-weight: bold;
 }
 
 .side-btn.boost-ready {
@@ -494,15 +513,8 @@ select {
 }
 
 .side-btn .side-btn-timer {
-  position: absolute;
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 9px;
-  background: #0d0308;
-  border: 1px solid var(--wood-dark);
-  border-radius: 8px;
-  padding: 1px 5px;
+  font-size: clamp(6px, 1.7vw, 9px);
+  color: #ffd966;
   white-space: nowrap;
 }
 
