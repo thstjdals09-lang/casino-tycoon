@@ -26,7 +26,7 @@ export class HUD {
   private suppressScrollRestore = false;
   private settingsOpen = false;
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
-  private lastBoostState: 'active' | 'ready' | 'cooldown' = 'ready';
+  private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -59,18 +59,6 @@ export class HUD {
     const bar = this.root.querySelector<HTMLElement>('#advance-bar');
     if (bar && advanceCost !== null) {
       bar.style.width = `${Math.min(100, (gs.cash / advanceCost) * 100)}%`;
-    }
-
-    // 부스트 상태(작동중/쿨다운/사용가능)가 바뀌면 버튼 구조 자체가 달라져야 하니 전체 다시 그리기.
-    const boostState = gs.isBoostActive() ? 'active' : gs.canActivateBoost() ? 'ready' : 'cooldown';
-    if (boostState !== this.lastBoostState) {
-      this.lastBoostState = boostState;
-      this.render();
-      return;
-    }
-    const boostTimer = this.root.querySelector('#boost-timer');
-    if (boostTimer) {
-      boostTimer.textContent = String(gs.isBoostActive() ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining());
     }
   }
 
@@ -122,6 +110,11 @@ export class HUD {
       this.render();
       return;
     }
+    if (action === 'set-buy-multiplier' && btn.dataset.mult) {
+      this.buyMultiplier = (btn.dataset.mult === 'max' ? 'max' : Number(btn.dataset.mult)) as 1 | 10 | 100 | 'max';
+      this.render();
+      return;
+    }
 
     let changed = false;
     switch (action) {
@@ -129,13 +122,17 @@ export class HUD {
         changed = this.gameState.buyTable();
         break;
       case 'upgrade-table':
-        if (id !== undefined) changed = this.gameState.upgradeTable(id);
+        if (id !== undefined) changed = this.gameState.upgradeTableTimes(id, this.buyMultiplier) > 0;
         break;
       case 'pull-dealer':
         changed = this.gameState.pullDealer() !== null;
         break;
       case 'upgrade-dealer':
-        if (id !== undefined) changed = this.gameState.upgradeDealer(id);
+        if (id !== undefined) changed = this.gameState.upgradeDealerTimes(id, this.buyMultiplier) > 0;
+        break;
+      case 'auto-assign-dealers':
+        this.gameState.autoAssignDealers();
+        changed = true;
         break;
       case 'advance-venue':
         changed = this.gameState.advanceVenue();
@@ -144,13 +141,10 @@ export class HUD {
         if (btn.dataset.job) changed = this.gameState.chooseJob(btn.dataset.job);
         break;
       case 'upgrade-design':
-        changed = this.gameState.upgradeDesign();
+        changed = this.gameState.upgradeDesignTimes(this.buyMultiplier) > 0;
         break;
       case 'upgrade-bar':
-        changed = this.gameState.upgradeBar();
-        break;
-      case 'activate-boost':
-        changed = this.gameState.activateBoost();
+        changed = this.gameState.upgradeBarTimes(this.buyMultiplier) > 0;
         break;
       case 'reset-game':
         if (window.confirm('정말 초기화할까요? 현금/테이블/딜러/전직/도감이 전부 사라지고 처음부터 다시 시작합니다.')) {
@@ -158,10 +152,6 @@ export class HUD {
           window.location.reload();
         }
         return;
-      case 'toggle-auto':
-        this.gameState.toggleAutoUpgrade();
-        changed = true;
-        break;
       case 'claim-mission':
         if (btn.dataset.mission) changed = this.gameState.claimMission(btn.dataset.mission as 'tap' | 'pull' | 'upgrade');
         break;
@@ -189,6 +179,21 @@ export class HUD {
     emitStateChanged();
   }
 
+  private multLabel(): string {
+    return this.buyMultiplier === 1 ? '' : ` x${this.buyMultiplier === 'max' ? 'MAX' : this.buyMultiplier}`;
+  }
+
+  private renderBuyMultiplierRow(): string {
+    const options: Array<1 | 10 | 100 | 'max'> = [1, 10, 100, 'max'];
+    const chips = options
+      .map(
+        (m) =>
+          `<button class="chip ${this.buyMultiplier === m ? 'active' : ''}" data-action="set-buy-multiplier" data-mult="${m}">${m === 'max' ? 'MAX' : `x${m}`}</button>`
+      )
+      .join('');
+    return `<div class="filter-row buy-mult-row">${chips}</div>`;
+  }
+
   private renderJobChoiceModal(): string {
     const choices = this.gameState.pendingJobChoices();
     if (!choices || choices.length === 0) return '';
@@ -214,12 +219,6 @@ export class HUD {
     const gs = this.gameState;
     const tier = gs.tier;
     const nextTableCost = gs.nextTableCost();
-
-    const boostHtml = gs.isBoostActive()
-      ? `<div class="boost-active" id="boost-status">🔥 황금시간 작동 중 · <span id="boost-timer">${gs.boostSecondsRemaining()}</span>초 남음 (수익 2배)</div>`
-      : `<button class="big-action boost" data-action="activate-boost" ${gs.canActivateBoost() ? '' : 'disabled'} id="boost-btn">
-           🔥 황금시간 발동 (60초간 수익 2배)${gs.canActivateBoost() ? '' : ` · <span id="boost-timer">${gs.boostCooldownSecondsRemaining()}</span>초 후 재사용`}
-         </button>`;
 
     const rows = gs.tables
       .map((t) => {
@@ -267,7 +266,7 @@ export class HUD {
                 ${dealerOptions}
               </select>
               <button data-action="upgrade-table" data-id="${t.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
-                강화 (${formatCash(upgradeCost)})
+                강화${this.multLabel()} (${formatCash(upgradeCost)}~)
               </button>
             </div>
           </div>`;
@@ -275,9 +274,11 @@ export class HUD {
       .join('');
 
     return `
-      ${boostHtml}
       <button class="big-action" data-action="buy-table" data-cost="${nextTableCost ?? Infinity}" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
         + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
+      </button>
+      <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
+        🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
       </button>
       <div class="row-list">${rows}</div>
       <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님 최대 8명이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
@@ -315,7 +316,7 @@ export class HUD {
             </div>
             <div class="row-details">
               <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
-                교육 (${formatCash(upgradeCost)})
+                교육${this.multLabel()} (${formatCash(upgradeCost)}~)
               </button>
             </div>
           </div>`;
@@ -456,13 +457,13 @@ export class HUD {
       <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
       <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다. Lv.3 화분, Lv.6 액자, Lv.10 샹들리에가 매장에 추가돼요.</p>
       <button class="big-action design" data-action="upgrade-design" data-cost="${designCost}" ${gs.cash < designCost ? 'disabled' : ''}>
-        🖼️ 인테리어 업그레이드 (${formatCash(designCost)})
+        🖼️ 인테리어 업그레이드${this.multLabel()} (${formatCash(designCost)}~)
       </button>
 
       <h3 class="section-title">🍸 미니바 (Lv.${gs.barLevel})</h3>
       <p class="tab-caption">${gs.barLevel > 0 ? `현재 음료 가격 ${formatCash(gs.drinkPrice())} · 초당 매출 ${formatCash(gs.barIncomePerSecond())}` : '아직 바가 없습니다. 업그레이드하면 음료 판매를 시작합니다.'}</p>
       <button class="big-action bar" data-action="upgrade-bar" data-cost="${barCost}" ${gs.cash < barCost ? 'disabled' : ''}>
-        🍹 바 업그레이드 (${formatCash(barCost)})
+        🍹 바 업그레이드${this.multLabel()} (${formatCash(barCost)}~)
       </button>
 
       <div class="advance-block">
@@ -509,16 +510,11 @@ export class HUD {
 
   private renderSettingsModal(): string {
     if (!this.settingsOpen) return '';
-    const gs = this.gameState;
     return `
       <div class="job-modal">
         <div class="job-modal-inner">
           <h2>⚙️ 설정</h2>
           <div class="job-cards">
-            <button class="chip auto-toggle ${gs.autoUpgradeEnabled ? 'active' : ''}" data-action="toggle-auto">
-              🤖 자동 업그레이드: ${gs.autoUpgradeEnabled ? '켜짐' : '꺼짐'}
-            </button>
-            <p class="tab-caption" style="text-align:left">여유 자금이 생기면 테이블 구매/강화, 딜러 강화, 인테리어·바 업그레이드를 자동으로 처리합니다. (가챠와 매장 확장은 재미 요소라 직접 눌러야 해요)</p>
             <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>
           </div>
           <button class="close-settings-btn" data-action="close-settings">닫기</button>
@@ -554,6 +550,7 @@ export class HUD {
         <div class="income" id="hud-income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
         <button class="settings-btn" data-action="open-settings">⚙️</button>
       </div>
+      ${this.renderBuyMultiplierRow()}
 
       <div class="tab-content">${tabContent}</div>
 

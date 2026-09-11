@@ -35,6 +35,7 @@ body {
 #game-container {
   flex: 1 1 auto;
   min-height: 0;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -348,6 +349,17 @@ select {
   font-weight: bold;
 }
 
+.buy-mult-row {
+  padding: 6px 14px 0;
+  justify-content: flex-end;
+}
+
+.big-action.auto-assign {
+  background: linear-gradient(180deg, #4ea8ff, #2f6bd6);
+  border-color: #1f4e9e;
+  margin-top: 6px;
+}
+
 .auto-toggle {
   width: 100%;
   padding: 10px;
@@ -420,6 +432,100 @@ select {
   border: none;
   font-size: 18px;
   padding: 2px 6px;
+}
+
+/* ---- 게임 화면 우측 고정 액션 패널 ---- */
+#side-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 15;
+}
+
+#side-actions-left {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 15;
+}
+
+.side-btn {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #170609;
+  border: 2px solid var(--wood-dark);
+  color: #fff3d6;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.side-btn.active {
+  border-color: var(--gold);
+  background: #3a1018;
+}
+
+.side-btn.boost-ready {
+  border-color: #ffb347;
+  animation: side-btn-pulse 1.2s infinite;
+}
+
+@keyframes side-btn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 179, 71, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 179, 71, 0);
+  }
+}
+
+.side-btn .side-btn-timer {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  background: #0d0308;
+  border: 1px solid var(--wood-dark);
+  border-radius: 8px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.side-btn .side-btn-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff5c5c;
+  border: 1px solid #0d0308;
+}
+
+.event-modal-body {
+  text-align: left;
+  font-size: 12px;
+  color: #d8b98a;
+  line-height: 1.6;
+}
+
+.event-modal-body b {
+  color: var(--gold);
 }
 
 .close-settings-btn {

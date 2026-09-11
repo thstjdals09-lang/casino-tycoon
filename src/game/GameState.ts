@@ -277,12 +277,26 @@ export class GameState {
     return true;
   }
 
+  upgradeDesignTimes(times: number | 'max'): number {
+    let count = 0;
+    const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+    while (count < max && this.upgradeDesign()) count++;
+    return count;
+  }
+
   upgradeBar(): boolean {
     const cost = this.barUpgradeCost();
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     this.data.barLevel += 1;
     return true;
+  }
+
+  upgradeBarTimes(times: number | 'max'): number {
+    let count = 0;
+    const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+    while (count < max && this.upgradeBar()) count++;
+    return count;
   }
 
   totalIncomePerSecond(): number {
@@ -352,6 +366,14 @@ export class GameState {
     return true;
   }
 
+  /** times번(또는 'max'로 살 수 있는 만큼) 연속 강화. 실제로 산 횟수를 반환. */
+  upgradeTableTimes(tableId: number, times: number | 'max'): number {
+    let count = 0;
+    const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+    while (count < max && this.upgradeTable(tableId)) count++;
+    return count;
+  }
+
   /** 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다. */
   pullDealer(): GachaResult | null {
     const cost = this.nextGachaCost();
@@ -385,6 +407,14 @@ export class GameState {
     return true;
   }
 
+  /** times번(또는 'max') 연속 딜러 강화. */
+  upgradeDealerTimes(dealerId: number, times: number | 'max'): number {
+    let count = 0;
+    const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+    while (count < max && this.upgradeDealer(dealerId)) count++;
+    return count;
+  }
+
   assignDealer(dealerId: number, tableId: number | null): void {
     const dealer = this.data.dealers.find((d) => d.id === dealerId);
     if (!dealer) return;
@@ -410,6 +440,21 @@ export class GameState {
     }
 
     dealer.assignedTableId = tableId;
+  }
+
+  /** 딜러 자동배치: 효율 높은 딜러부터 레벨 높은 테이블부터 순서대로 매칭한다(가장 좋은 조합이 되도록). */
+  autoAssignDealers(): void {
+    const tier = this.tier;
+    const dealersSorted = [...this.data.dealers].sort((a, b) => dealerMultiplier(tier, b) - dealerMultiplier(tier, a));
+    const tablesSorted = [...this.data.tables].sort((a, b) => b.level - a.level);
+
+    for (const d of this.data.dealers) {
+      if (d.assignedTableId !== null) this.assignDealer(d.id, null);
+    }
+    const n = Math.min(dealersSorted.length, tablesSorted.length);
+    for (let i = 0; i < n; i++) {
+      this.assignDealer(dealersSorted[i].id, tablesSorted[i].id);
+    }
   }
 
   tapTable(tableId: number): number {
