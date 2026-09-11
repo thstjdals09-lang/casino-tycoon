@@ -152,11 +152,15 @@ export class HUD {
         const income = gs.tableIncomePerSecond(t);
         const upgradeCost = gs.tableUpgradeCost(t);
         const dealerOptions = gs.dealers
-          .filter((d) => d.assignedTableId === null || d.assignedTableId === t.id)
-          .map(
-            (d) =>
-              `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level})</option>`
-          )
+          .map((d) => {
+            const label =
+              d.assignedTableId === null
+                ? '대기 중'
+                : d.assignedTableId === t.id
+                ? '이 테이블'
+                : `테이블 #${d.assignedTableId + 1}에서 이동`;
+            return `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level}) · ${label}</option>`;
+          })
           .join('');
         const custBadge = t.customerGrade
           ? (() => {
