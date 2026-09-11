@@ -3,27 +3,50 @@ import { gameState } from '../game/instance';
 import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
+import { ensurePixelTexture, floorTileGrid, humanoidGrid, plantGrid, tableGrid } from '../game/pixelart';
 
 const SLOT_W = 170;
 const SLOT_H = 130;
 const COLS = 4;
-const GRID_TOP = 40;
+const GRID_TOP = 48;
 const AUTOSAVE_MS = 10_000;
-const TILE = 16; // 도트 느낌을 위한 바닥 타일 크기
+const FLOOR_TILE_PX = 6; // floorTileGrid()가 8x8이므로 실제 타일은 48x48
+
+const HUMANOID_PALETTE_BASE = { h: '#2b2320', s: '#f5c9a0', w: '#ffffff', p: '#33415c', b: '#1a1a1a' };
+const CUSTOMER_SHIRTS = ['#e0455c', '#4f8fe0', '#f0a63c'];
+
+function toHex(color: number): string {
+  return '#' + color.toString(16).padStart(6, '0');
+}
+
+function lighten(color: number, amount: number): number {
+  const r = Math.min(255, Math.floor(((color >> 16) & 0xff) + amount));
+  const g = Math.min(255, Math.floor(((color >> 8) & 0xff) + amount));
+  const b = Math.min(255, Math.floor((color & 0xff) + amount));
+  return (r << 16) | (g << 8) | b;
+}
 
 export class MainScene extends Phaser.Scene {
   private layoutContainer!: Phaser.GameObjects.Container;
-  private floor!: Phaser.GameObjects.Container;
+  private decor!: Phaser.GameObjects.Container;
+  private ambientCustomers: Phaser.GameObjects.Image[] = [];
   private timeSinceSave = 0;
+  private lastTierId = -1;
 
   constructor() {
     super('MainScene');
   }
 
   create() {
-    this.floor = this.add.container(0, 0);
+    this.buildSharedTextures();
+
+    const { width, height } = this.scale;
+    this.add.tileSprite(0, 0, width, height, 'floor-tile').setOrigin(0, 0);
+    this.decor = this.add.container(0, 0);
     this.layoutContainer = this.add.container(0, 0);
 
+    this.buildDecor();
+    this.spawnAmbientCustomers();
     this.rebuildLayout();
 
     gameEvents.addEventListener('state-changed', () => this.rebuildLayout());
@@ -40,34 +63,69 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private drawFloor() {
-    this.floor.removeAll(true);
-    const tier = gameState.tier;
-    const { width, height } = this.scale;
-    const cols = Math.ceil(width / TILE);
-    const rows = Math.ceil(height / TILE);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const shade = (r + c) % 2 === 0 ? tier.floorColor : this.darken(tier.floorColor, 0.85);
-        const tile = this.add.rectangle(c * TILE, r * TILE, TILE, TILE, shade).setOrigin(0, 0);
-        this.floor.add(tile);
-      }
+  private buildSharedTextures() {
+    ensurePixelTexture(this, 'floor-tile', floorTileGrid(), { a: '#e8c99b', b: '#d4a76a' }, FLOOR_TILE_PX);
+    ensurePixelTexture(this, 'plant-decor', plantGrid(), { l: '#4caf6b', t: '#2e7d4f', p: '#c56a3b' }, 6);
+
+    const humanoid = humanoidGrid();
+    for (const g of ['N', 'R', 'SR', 'SSR'] as const) {
+      const color = toHex(gradeConfig(g).color);
+      ensurePixelTexture(this, `dealer-${g}`, humanoid, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
+    }
+    CUSTOMER_SHIRTS.forEach((color, i) => {
+      ensurePixelTexture(this, `customer-${i}`, humanoid, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
+    });
+  }
+
+  private ensureTableTexture(tierId: number, themeColor: number): string {
+    const key = `table-tier-${tierId}`;
+    const felt = toHex(lighten(themeColor, 60));
+    ensurePixelTexture(this, key, tableGrid(18, 9), { r: '#8b5a2b', f: felt, x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0' }, 5);
+    return key;
+  }
+
+  private buildDecor() {
+    this.decor.removeAll(true);
+    const { width } = this.scale;
+    const count = Math.max(3, Math.floor(width / 220));
+    for (let i = 0; i < count; i++) {
+      const x = 40 + i * (width - 80) / Math.max(1, count - 1);
+      const plant = this.add.image(x, 20, 'plant-decor').setOrigin(0.5, 0);
+      this.decor.add(plant);
     }
   }
 
-  private darken(color: number, factor: number): number {
-    const r = Math.floor(((color >> 16) & 0xff) * factor);
-    const g = Math.floor(((color >> 8) & 0xff) * factor);
-    const b = Math.floor((color & 0xff) * factor);
-    return (r << 16) | (g << 8) | b;
+  private spawnAmbientCustomers() {
+    this.ambientCustomers.forEach((c) => c.destroy());
+    this.ambientCustomers = [];
+    const { width, height } = this.scale;
+    const y = height - 24;
+    for (let i = 0; i < 2; i++) {
+      const key = `customer-${i % CUSTOMER_SHIRTS.length}`;
+      const startX = 60 + i * 120;
+      const img = this.add.image(startX, y, key).setOrigin(0.5, 1);
+      this.ambientCustomers.push(img);
+      this.tweens.add({
+        targets: img,
+        x: width - 60 - i * 80,
+        duration: 6000 + i * 1500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private rebuildLayout() {
-    this.drawFloor();
+    const tier = gameState.tier;
+    if (tier.id !== this.lastTierId) {
+      this.lastTierId = tier.id;
+      this.buildDecor();
+    }
     this.layoutContainer.removeAll(true);
 
-    const tier = gameState.tier;
     const tables = gameState.tables;
+    const tableTextureKey = this.ensureTableTexture(tier.id, tier.themeColor);
     const startX = (this.scale.width - Math.min(tier.maxTables, COLS) * SLOT_W) / 2 + SLOT_W / 2;
 
     for (let i = 0; i < tier.maxTables; i++) {
@@ -77,7 +135,7 @@ export class MainScene extends Phaser.Scene {
       const y = GRID_TOP + SLOT_H / 2 + row * SLOT_H;
 
       if (i < tables.length) {
-        this.drawActiveTable(x, y, tables[i]);
+        this.drawActiveTable(x, y, tables[i], tableTextureKey);
       } else if (i === tables.length) {
         this.drawBuySlot(x, y);
       } else {
@@ -86,63 +144,50 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  /** 픽셀 느낌의 트림(테두리 점무늬)을 사각형 위쪽에 그린다. */
-  private drawPixelTrim(x: number, y: number, w: number, color: number) {
-    const dotSize = 6;
-    const count = Math.floor(w / (dotSize * 2));
-    const startX = x - (count * dotSize * 2) / 2 + dotSize / 2;
-    for (let i = 0; i < count; i++) {
-      const dot = this.add.rectangle(startX + i * dotSize * 2, y, dotSize, dotSize, color, 0.9);
-      this.layoutContainer.add(dot);
-    }
-  }
-
-  private drawActiveTable(x: number, y: number, table: { id: number; level: number }) {
-    const tier = gameState.tier;
+  private drawActiveTable(x: number, y: number, table: { id: number; level: number }, tableTextureKey: string) {
     const dealer = gameState.dealerFor(table as never);
     const income = gameState.tableIncomePerSecond(table as never);
 
-    const box = this.add.rectangle(x, y, 120, 84, tier.themeColor).setStrokeStyle(3, 0xffffff, 0.85);
-    box.setInteractive({ useHandCursor: true });
-    box.on('pointerdown', () => this.onTapTable(table.id, x, y));
-    this.drawPixelTrim(x, y - 42, 120, 0xffffff);
+    const panel = this.add
+      .rectangle(x, y, 148, 118, 0xffffff, 0.06)
+      .setStrokeStyle(2, 0xffffff, 0.25);
+    panel.setInteractive({ useHandCursor: true });
+    panel.on('pointerdown', () => this.onTapTable(table.id, x, y));
 
-    const dealerColor = dealer ? gradeConfig(dealer.grade).color : 0x555555;
-    // 딜러 배지: 등급 색으로 채워진 작은 픽셀 사각형 3x3 블록 형태
-    const badge = this.add.container(x + 40, y - 30);
-    const px = 4;
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 3; c++) {
-        const isCorner = (r === 0 || r === 2) && (c === 0 || c === 2);
-        const cell = this.add.rectangle((c - 1) * px, (r - 1) * px, px, px, dealerColor, isCorner ? 0.5 : 1);
-        badge.add(cell);
-      }
+    const tableImg = this.add.image(x, y + 30, tableTextureKey).setOrigin(0.5, 0.5);
+
+    let dealerImg: Phaser.GameObjects.Image | null = null;
+    if (dealer) {
+      dealerImg = this.add.image(x, y + 6, `dealer-${dealer.grade}`).setOrigin(0.5, 1);
     }
 
     const levelText = this.add
-      .text(x, y - 8, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' })
+      .text(x, y - 44, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '14px', color: '#fff8ec' })
       .setOrigin(0.5);
     const incomeText = this.add
-      .text(x, y + 16, `${formatCash(income)}/초`, { fontFamily: 'monospace', fontSize: '12px', color: '#e8e8e8' })
+      .text(x, y + 48, `${formatCash(income)}/초`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffe6b3' })
       .setOrigin(0.5);
     const gradeText = dealer
       ? this.add
-          .text(x, y + 34, `[${gradeConfig(dealer.grade).label}]`, {
+          .text(x, y - 28, `[${gradeConfig(dealer.grade).label}]`, {
             fontFamily: 'monospace',
             fontSize: '10px',
-            color: '#' + dealerColor.toString(16).padStart(6, '0'),
+            color: toHex(gradeConfig(dealer.grade).color),
           })
           .setOrigin(0.5)
       : null;
 
-    this.layoutContainer.add([box, badge, levelText, incomeText, ...(gradeText ? [gradeText] : [])]);
+    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, levelText, incomeText];
+    if (dealerImg) items.push(dealerImg);
+    if (gradeText) items.push(gradeText);
+    this.layoutContainer.add(items);
   }
 
   private drawBuySlot(x: number, y: number) {
     const cost = gameState.nextTableCost();
-    const box = this.add.rectangle(x, y, 120, 84, 0x000000, 0.25).setStrokeStyle(2, 0xffffff, 0.5);
+    const box = this.add.rectangle(x, y, 148, 118, 0xfff3d6, 0.12).setStrokeStyle(2, 0xffd98a, 0.7);
     const label = this.add
-      .text(x, y - 10, '+ 테이블 구매', { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff' })
+      .text(x, y - 12, '+ 테이블 구매', { fontFamily: 'monospace', fontSize: '13px', color: '#fff3d6' })
       .setOrigin(0.5);
     const costText = this.add
       .text(x, y + 14, cost !== null ? formatCash(cost) : '', {
@@ -163,7 +208,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawLockedSlot(x: number, y: number) {
-    const box = this.add.rectangle(x, y, 120, 84, 0x000000, 0.15).setStrokeStyle(1, 0xffffff, 0.2);
+    const box = this.add.rectangle(x, y, 148, 118, 0x000000, 0.12).setStrokeStyle(1, 0xffffff, 0.15);
     const label = this.add
       .text(x, y, '잠김', { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff55' })
       .setOrigin(0.5);
@@ -175,7 +220,7 @@ export class MainScene extends Phaser.Scene {
     if (bonus <= 0) return;
 
     const floatText = this.add
-      .text(x, y - 40, `+${formatCash(bonus)}`, {
+      .text(x, y - 50, `+${formatCash(bonus)}`, {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#ffd966',
@@ -184,7 +229,7 @@ export class MainScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: floatText,
-      y: y - 80,
+      y: y - 90,
       alpha: 0,
       duration: 900,
       ease: 'Cubic.easeOut',

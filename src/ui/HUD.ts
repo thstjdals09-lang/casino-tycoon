@@ -4,6 +4,8 @@ import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 
+type Tab = 'table' | 'dealer' | 'venue';
+
 function gradeHex(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
 }
@@ -11,6 +13,7 @@ function gradeHex(color: number): string {
 export class HUD {
   private root: HTMLElement;
   private gameState: GameState;
+  private tab: Tab = 'table';
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -34,6 +37,12 @@ export class HUD {
     if (!btn) return;
     const action = btn.dataset.action;
     const id = btn.dataset.id !== undefined ? Number(btn.dataset.id) : undefined;
+
+    if (action === 'set-tab' && btn.dataset.tab) {
+      this.tab = btn.dataset.tab as Tab;
+      this.render();
+      return;
+    }
 
     let changed = false;
     switch (action) {
@@ -87,45 +96,33 @@ export class HUD {
     return `
       <div class="job-modal">
         <div class="job-modal-inner">
-          <h2>전직을 선택하세요</h2>
+          <h2>✨ 전직을 선택하세요</h2>
           <div class="job-cards">${cards}</div>
         </div>
       </div>`;
   }
 
-  private renderJobPath(): string {
-    const path = this.gameState.jobPath;
-    if (path.length === 0) return '';
-    const names = path.map((id) => JOBS.find((j) => j.id === id)?.name ?? id).join(' → ');
-    return `<div class="job-path">전직: ${names}</div>`;
-  }
-
-  private renderGachaFlash(): string {
-    const last = this.gameState.lastGachaResult;
-    if (!last) return '';
-    const cfg = gradeConfig(last.grade);
-    return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">[${cfg.label}] 딜러 #${last.dealerId + 1} 획득!</div>`;
-  }
-
-  private render(): void {
+  private renderTableTab(): string {
     const gs = this.gameState;
     const tier = gs.tier;
-    const advanceCost = tier.advanceCost;
-    const jobsBlocking = gs.pendingJobChoices() !== null;
+    const nextTableCost = gs.nextTableCost();
 
-    const tableRows = gs.tables
+    const rows = gs.tables
       .map((t) => {
         const income = gs.tableIncomePerSecond(t);
         const upgradeCost = gs.tableUpgradeCost(t);
         const dealerOptions = gs.dealers
           .filter((d) => d.assignedTableId === null || d.assignedTableId === t.id)
-          .map((d) => `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level})</option>`)
+          .map(
+            (d) =>
+              `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level})</option>`
+          )
           .join('');
 
         return `
           <div class="row">
             <div class="row-main">
-              <span class="row-title">테이블 #${t.id + 1} · Lv.${t.level}</span>
+              <span class="row-title">🃏 테이블 #${t.id + 1} · Lv.${t.level}</span>
               <span class="row-sub">${formatCash(income)}/초</span>
             </div>
             <select data-action="assign-dealer" data-id="${t.id}">
@@ -139,7 +136,27 @@ export class HUD {
       })
       .join('');
 
-    const dealerRows = gs.dealers
+    return `
+      <button class="big-action" data-action="buy-table" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
+        + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
+      </button>
+      <div class="row-list">${rows}</div>
+      <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables})</p>`;
+  }
+
+  private renderDealerTab(): string {
+    const gs = this.gameState;
+    const nextGachaCost = gs.nextGachaCost();
+    const last = gs.lastGachaResult;
+
+    const flash = last
+      ? (() => {
+          const cfg = gradeConfig(last.grade);
+          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] 딜러 #${last.dealerId + 1} 획득!</div>`;
+        })()
+      : '';
+
+    const rows = gs.dealers
       .map((d) => {
         const upgradeCost = gs.dealerUpgradeCost(d);
         const cfg = gradeConfig(d.grade);
@@ -147,7 +164,7 @@ export class HUD {
           <div class="row">
             <div class="row-main">
               <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] 딜러 #${d.id + 1} · Lv.${d.level}</span>
-              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정` : '대기 중 (보유 효과만 적용)'}</span>
+              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중 (보유 효과만 적용)'}</span>
             </div>
             <button data-action="upgrade-dealer" data-id="${d.id}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
               교육 (${formatCash(upgradeCost)})
@@ -156,58 +173,76 @@ export class HUD {
       })
       .join('');
 
-    const nextTableCost = gs.nextTableCost();
-    const nextGachaCost = gs.nextGachaCost();
+    return `
+      <button class="big-action gacha" data-action="pull-dealer" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
+        🎰 딜러 가챠 (${formatCash(nextGachaCost)})
+      </button>
+      ${flash}
+      <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
+      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2%</p>`;
+  }
 
-    this.root.innerHTML = `
-      ${this.renderJobChoiceModal()}
+  private renderVenueTab(): string {
+    const gs = this.gameState;
+    const tier = gs.tier;
+    const advanceCost = tier.advanceCost;
+    const jobsBlocking = gs.pendingJobChoices() !== null;
+    const path = gs.jobPath;
+    const jobPathHtml =
+      path.length > 0
+        ? `<div class="job-path">전직: ${path.map((id) => JOBS.find((j) => j.id === id)?.name ?? id).join(' → ')}</div>`
+        : '<div class="job-path">아직 전직 전</div>';
 
-      <div class="panel-header">
-        <h1>${tier.name}</h1>
+    return `
+      <div class="venue-card">
+        <h2>${tier.name}</h2>
         <p>${tier.description}</p>
-        ${this.renderJobPath()}
+        ${jobPathHtml}
       </div>
-
-      <div class="stat-block">
-        <div class="cash">${formatCash(gs.cash)}</div>
-        <div class="income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
-        ${this.renderGachaFlash()}
-      </div>
-
-      <div class="action-row">
-        <button data-action="buy-table" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
-          테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
-        </button>
-        <button data-action="pull-dealer" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
-          딜러 가챠 (${formatCash(nextGachaCost)})
-        </button>
-      </div>
-
-      <section>
-        <h2>테이블 (${gs.tables.length}/${tier.maxTables})</h2>
-        <div class="row-list">${tableRows}</div>
-      </section>
-
-      <section>
-        <h2>딜러 (${gs.dealers.length})</h2>
-        <div class="row-list">${dealerRows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
-      </section>
-
       <div class="advance-block">
         ${
           jobsBlocking
-            ? '<p class="final-tier">전직을 먼저 선택해야 매장을 확장할 수 있습니다.</p>'
+            ? '<p class="final-tier">전직을 먼저 선택해야 매장을 확장할 수 있습니다. (딜러 탭 옆 팝업 확인)</p>'
             : advanceCost === null
-            ? '<p class="final-tier">국내 최고 카지노에 도달했습니다!</p>'
+            ? '<p class="final-tier">🏆 국내 최고 카지노에 도달했습니다!</p>'
             : `
           <div class="advance-progress">
             <div class="advance-progress-bar" style="width:${Math.min(100, (gs.cash / advanceCost) * 100)}%"></div>
           </div>
           <button class="advance-btn" data-action="advance-venue" ${gs.canAdvanceVenue() ? '' : 'disabled'}>
-            매장 확장 (${formatCash(advanceCost)})
+            🏗️ 매장 확장 (${formatCash(advanceCost)})
           </button>`
         }
+      </div>`;
+  }
+
+  private render(): void {
+    const gs = this.gameState;
+
+    const tabContent =
+      this.tab === 'table' ? this.renderTableTab() : this.tab === 'dealer' ? this.renderDealerTab() : this.renderVenueTab();
+
+    this.root.innerHTML = `
+      ${this.renderJobChoiceModal()}
+
+      <div class="stat-bar">
+        <div class="cash">💰 ${formatCash(gs.cash)}</div>
+        <div class="income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
       </div>
+
+      <div class="tab-content">${tabContent}</div>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn ${this.tab === 'table' ? 'active' : ''}" data-action="set-tab" data-tab="table">
+          <span class="nav-icon">🃏</span><span>테이블</span>
+        </button>
+        <button class="nav-btn ${this.tab === 'dealer' ? 'active' : ''}" data-action="set-tab" data-tab="dealer">
+          <span class="nav-icon">🎰</span><span>딜러</span>
+        </button>
+        <button class="nav-btn ${this.tab === 'venue' ? 'active' : ''}" data-action="set-tab" data-tab="venue">
+          <span class="nav-icon">🏠</span><span>매장</span>
+        </button>
+      </nav>
     `;
   }
 }
