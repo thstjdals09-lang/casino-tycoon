@@ -5,7 +5,7 @@ import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
 import { customerGradeConfig } from '../game/customers';
 import { ensurePixelTexture, barCounterGrid, chipStackGrid, floorTileGrid, humanoidGrid, tableGrid } from '../game/pixelart';
-import type { TableInstance } from '../game/types';
+import type { TableInstance, VenueTierConfig } from '../game/types';
 
 const SLOT_W = 170;
 const SLOT_H = 130;
@@ -55,6 +55,10 @@ export class MainScene extends Phaser.Scene {
   private layoutContainer!: Phaser.GameObjects.Container;
   private decor!: Phaser.GameObjects.Container;
   private floorSprite!: Phaser.GameObjects.TileSprite;
+  private floorPlaque!: Phaser.GameObjects.Container;
+  private floorPlaqueTitle!: Phaser.GameObjects.Text;
+  private floorPlaqueSubtitle!: Phaser.GameObjects.Text;
+  private hasInitialized = false;
   private timeSinceSave = 0;
   private lastTierId = -1;
   private tablePositions = new Map<number, { x: number; y: number }>();
@@ -77,8 +81,21 @@ export class MainScene extends Phaser.Scene {
     this.decor = this.add.container(0, 0);
     this.layoutContainer = this.add.container(0, 0);
 
+    // 카메라를 스크롤해도 항상 화면에 고정되는 "현재 층" 표지판.
+    const plaqueBg = this.add.rectangle(0, 0, 128, 40, 0x0d0308, 0.85).setStrokeStyle(2, 0xc9a227, 0.9).setOrigin(0, 0);
+    this.floorPlaqueTitle = this.add
+      .text(64, 7, '', { fontFamily: 'monospace', fontSize: '13px', color: '#ffd966', fontStyle: 'bold' })
+      .setOrigin(0.5, 0);
+    this.floorPlaqueSubtitle = this.add
+      .text(64, 23, '', { fontFamily: 'monospace', fontSize: '9px', color: '#fff3d6' })
+      .setOrigin(0.5, 0);
+    this.floorPlaque = this.add.container(8, 8, [plaqueBg, this.floorPlaqueTitle, this.floorPlaqueSubtitle]);
+    this.floorPlaque.setScrollFactor(0);
+    this.floorPlaque.setDepth(20);
+
     this.buildDecor();
     this.rebuildLayout();
+    this.hasInitialized = true;
     this.scheduleSpeechBubble();
 
     // 층이 넓어지면(테이블 많아지면) 세로로 드래그해서 둘러볼 수 있게.
@@ -156,10 +173,46 @@ export class MainScene extends Phaser.Scene {
   private buildDecor() {
     this.decor.removeAll(true);
     const { width } = this.scale;
+    const tier = gameState.tier;
     const bar = this.add.image(width / 2, 4, 'bar-counter').setOrigin(0.5, 0);
-    const chipLeft = this.add.image(28, 8, 'chip-decor').setOrigin(0.5, 0);
-    const chipRight = this.add.image(width - 28, 8, 'chip-decor').setOrigin(0.5, 0);
-    this.decor.add([bar, chipLeft, chipRight]);
+    this.decor.add(bar);
+    // 층이 높을수록 칩 장식이 더 많이 붙어서 매장이 점점 화려해지는 느낌을 준다.
+    const chipCount = 2 + tier.id;
+    for (let i = 0; i < chipCount; i++) {
+      const t = chipCount === 1 ? 0.5 : i / (chipCount - 1);
+      const x = 28 + t * (width - 56);
+      if (Math.abs(x - width / 2) < 60) continue; // 바 카운터 자리는 비워둠
+      this.decor.add(this.add.image(x, 8, 'chip-decor').setOrigin(0.5, 0));
+    }
+  }
+
+  private showFloorChangeToast(tier: VenueTierConfig) {
+    const { width } = this.scale;
+    const text = `🎉 ${tier.id + 1}층 입장 · ${tier.name}`;
+    const label = this.add
+      .text(width / 2, 90, text, { fontFamily: 'monospace', fontSize: '16px', color: '#2a0d13', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(30);
+    const pad = 12;
+    const bg = this.add
+      .rectangle(width / 2, 90, label.width + pad * 2, label.height + pad, 0xffd966, 0.95)
+      .setStrokeStyle(3, 0xc9a227, 1)
+      .setScrollFactor(0)
+      .setDepth(29);
+
+    this.tweens.add({ targets: [label, bg], scale: 1.06, duration: 220, yoyo: true, ease: 'Quad.easeOut' });
+    this.tweens.add({
+      targets: [label, bg],
+      alpha: 0,
+      duration: 900,
+      delay: 2200,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        label.destroy();
+        bg.destroy();
+      },
+    });
   }
 
   private scheduleSpeechBubble() {
@@ -213,9 +266,14 @@ export class MainScene extends Phaser.Scene {
     const tier = gameState.tier;
     const tierChanged = tier.id !== this.lastTierId;
     if (tierChanged) {
+      const isRealAdvance = this.hasInitialized && this.lastTierId !== -1;
       this.lastTierId = tier.id;
       this.buildDecor();
       this.floorSprite.setTexture(this.ensureFloorTexture(tier.id, tier.floorColor));
+      this.cameras.main.setBackgroundColor(tier.floorColor);
+      this.floorPlaqueTitle.setText(`🏢 ${tier.id + 1}층`);
+      this.floorPlaqueSubtitle.setText(tier.name);
+      if (isRealAdvance) this.showFloorChangeToast(tier);
     }
     this.layoutContainer.removeAll(true);
     this.tablePositions.clear();
