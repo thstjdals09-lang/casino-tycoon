@@ -138,6 +138,13 @@ select {
   border: 1px solid var(--wood-dark);
   border-radius: 6px;
   padding: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-details button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .row-list {
@@ -148,12 +155,18 @@ select {
 
 .row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   background: #170609;
   border: 1px solid var(--wood-dark);
   border-radius: 8px;
   padding: 7px 9px;
+}
+
+.row-details {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .row-main {

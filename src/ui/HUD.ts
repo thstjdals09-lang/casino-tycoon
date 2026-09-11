@@ -201,13 +201,15 @@ export class HUD {
               <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level} ${custBadge}</span>
               <span class="row-sub">${formatCash(income)}/초</span>
             </div>
-            <select data-action="assign-dealer" data-id="${t.id}">
-              <option value="">딜러 없음</option>
-              ${dealerOptions}
-            </select>
-            <button data-action="upgrade-table" data-id="${t.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
-              강화 (${formatCash(upgradeCost)})
-            </button>
+            <div class="row-details">
+              <select data-action="assign-dealer" data-id="${t.id}">
+                <option value="">딜러 없음</option>
+                ${dealerOptions}
+              </select>
+              <button data-action="upgrade-table" data-id="${t.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
+                강화 (${formatCash(upgradeCost)})
+              </button>
+            </div>
           </div>`;
       })
       .join('');
@@ -246,9 +248,11 @@ export class HUD {
               <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] 딜러 #${d.id + 1} · Lv.${d.level}</span>
               <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중 (보유 효과만 적용)'}</span>
             </div>
-            <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
-              교육 (${formatCash(upgradeCost)})
-            </button>
+            <div class="row-details">
+              <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
+                교육 (${formatCash(upgradeCost)})
+              </button>
+            </div>
           </div>`;
       })
       .join('');
