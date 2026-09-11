@@ -1,5 +1,8 @@
 export type CustomerGrade = 'C' | 'B' | 'A' | 'S';
 
+/** 홀덤 테이블 한 자리당 최대 착석 인원 (딜러 1 + 손님 최대 8). */
+export const SEATS_PER_TABLE = 8;
+
 export interface CustomerGradeConfig {
   grade: CustomerGrade;
   label: string;
@@ -40,4 +43,11 @@ export function rollCustomerGrade(designBonus = 0): CustomerGrade {
     r -= g.weight;
   }
   return 'C';
+}
+
+/**
+ * 홀덤 8인 테이블 컨셉: 딜러가 배정되면 손님 8명을 한 번에 추첨한다.
+ */
+export function rollCustomerGrades(count: number, designBonus = 0): CustomerGrade[] {
+  return Array.from({ length: count }, () => rollCustomerGrade(designBonus));
 }

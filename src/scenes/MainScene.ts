@@ -229,56 +229,56 @@ export class MainScene extends Phaser.Scene {
     panel.setInteractive({ useHandCursor: true });
     panel.on('pointerdown', () => this.onTapTable(table.id, x, y));
 
-    const tableImg = this.add.image(x, y + 30, tableTextureKey).setOrigin(0.5, 0.5);
+    const centerX = x;
+    const centerY = y + 34;
+    const tableImg = this.add.image(centerX, centerY, tableTextureKey).setOrigin(0.5, 0.5).setScale(0.85);
 
-    let dealerImg: Phaser.GameObjects.Image | null = null;
-    let sparkle: Phaser.GameObjects.Text | null = null;
+    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg];
+
+    // 홀덤 8인 테이블 컨셉: 딜러 1명 + 손님 최대 8명을 테이블 둘레(타원)에 배치.
+    const rx = 54;
+    const ry = 30;
+    const seatCount = 9; // 딜러 1 + 손님 8
+    const angleFor = (i: number) => (-90 + (360 / seatCount) * i) * (Math.PI / 180);
+
     if (dealer) {
-      dealerImg = this.add.image(x - 14, y + 6, `dealer-${dealer.grade}`).setOrigin(0.5, 1);
+      const a = angleFor(0);
+      const dx = centerX + rx * Math.cos(a);
+      const dy = centerY + ry * Math.sin(a);
+      const dealerImg = this.add.image(dx, dy, `dealer-${dealer.grade}`).setOrigin(0.5, 1).setScale(0.6);
+      items.push(dealerImg);
       if (dealer.grade === 'SSR') {
-        sparkle = this.add.text(x - 4, y - 24, '✨', { fontSize: '14px' }).setOrigin(0.5);
+        const sparkle = this.add.text(dx + 8, dy - 30, '✨', { fontSize: '12px' }).setOrigin(0.5);
         this.tweens.add({ targets: sparkle, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
+        items.push(sparkle);
       }
-    }
 
-    // 딜러가 있는(=손님이 착석하는) 테이블에만 손님 스프라이트가 앉는다. 등급은 매장 디자인 레벨에 따라 결정됨.
-    const custGrade = table.customerGrade;
-    let customerImg: Phaser.GameObjects.Image | null = null;
-    let customerSparkle: Phaser.GameObjects.Text | null = null;
-    if (dealer && custGrade) {
-      customerImg = this.add.image(x + 16, y + 52, `customer-${custGrade}`).setOrigin(0.5, 1).setScale(0.9);
-      if (custGrade === 'S') {
-        customerSparkle = this.add.text(x + 24, y + 24, '✨', { fontSize: '12px' }).setOrigin(0.5);
-        this.tweens.add({ targets: customerSparkle, alpha: 0.2, duration: 650, yoyo: true, repeat: -1 });
-      }
+      table.customerGrades.slice(0, 8).forEach((grade, seatIdx) => {
+        const a2 = angleFor(seatIdx + 1);
+        const cx = centerX + rx * Math.cos(a2);
+        const cy = centerY + ry * Math.sin(a2);
+        const custImg = this.add.image(cx, cy, `customer-${grade}`).setOrigin(0.5, 1).setScale(0.34);
+        items.push(custImg);
+        if (grade === 'S') {
+          const sparkle = this.add.text(cx + 5, cy - 16, '✨', { fontSize: '9px' }).setOrigin(0.5);
+          this.tweens.add({ targets: sparkle, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
+          items.push(sparkle);
+        }
+      });
     }
 
     const levelText = this.add
-      .text(x, y - 44, `Lv.${table.level}${table.level > 0 && table.level % 10 === 0 ? ' ⭐' : ''}`, {
+      .text(x, y - 52, `Lv.${table.level}${table.level > 0 && table.level % 10 === 0 ? ' ⭐' : ''}`, {
         fontFamily: 'monospace',
-        fontSize: '14px',
+        fontSize: '13px',
         color: '#fff8ec',
       })
       .setOrigin(0.5);
     const incomeText = this.add
-      .text(x, y + 48, `${formatCash(income)}/초`, { fontFamily: 'monospace', fontSize: '11px', color: '#ffe6b3' })
+      .text(x, y - 38, `${formatCash(income)}/초`, { fontFamily: 'monospace', fontSize: '10px', color: '#ffe6b3' })
       .setOrigin(0.5);
-    const gradeText = dealer
-      ? this.add
-          .text(x, y - 28, `[${gradeConfig(dealer.grade).label}]`, {
-            fontFamily: 'monospace',
-            fontSize: '10px',
-            color: toHex(gradeConfig(dealer.grade).color),
-          })
-          .setOrigin(0.5)
-      : null;
 
-    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, levelText, incomeText];
-    if (customerImg) items.push(customerImg);
-    if (customerSparkle) items.push(customerSparkle);
-    if (dealerImg) items.push(dealerImg);
-    if (gradeText) items.push(gradeText);
-    if (sparkle) items.push(sparkle);
+    items.push(levelText, incomeText);
     this.layoutContainer.add(items);
   }
 

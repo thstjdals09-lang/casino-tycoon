@@ -6,8 +6,8 @@ export interface TableInstance {
   level: number;
   dealerId: number | null;
   lastTapAt: number;
-  /** 딜러가 배정될 때 결정되는 착석 손님 등급. 딜러 없으면 null. */
-  customerGrade: CustomerGrade | null;
+  /** 딜러가 배정될 때 함께 착석하는 손님들의 등급(최대 8명, 홀덤 8인 테이블 컨셉). 딜러 없으면 빈 배열. */
+  customerGrades: CustomerGrade[];
 }
 
 export interface DealerInstance {

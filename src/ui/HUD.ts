@@ -188,12 +188,18 @@ export class HUD {
             return `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level}) · ${label}</option>`;
           })
           .join('');
-        const custBadge = t.customerGrade
-          ? (() => {
-              const c = customerGradeConfig(t.customerGrade!);
-              return `<span class="cust-badge" style="color:${gradeHex(c.color)}">👤 ${c.label}</span>`;
-            })()
-          : '';
+        const custBadge =
+          t.customerGrades.length > 0
+            ? (() => {
+                const order: Array<'S' | 'A' | 'B' | 'C'> = ['S', 'A', 'B', 'C'];
+                const tally = order
+                  .map((g) => ({ g, n: t.customerGrades.filter((x) => x === g).length }))
+                  .filter((e) => e.n > 0)
+                  .map((e) => `<span style="color:${gradeHex(customerGradeConfig(e.g).color)}">${e.g}×${e.n}</span>`)
+                  .join(' ');
+                return `<span class="cust-badge">👥 ${t.customerGrades.length}/8 (${tally})</span>`;
+              })()
+            : '';
 
         return `
           <div class="row">
@@ -219,7 +225,7 @@ export class HUD {
         + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
       </button>
       <div class="row-list">${rows}</div>
-      <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
+      <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님 최대 8명이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
   }
 
   private renderDealerTab(): string {

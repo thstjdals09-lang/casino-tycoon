@@ -4,7 +4,7 @@ import { createNewSave, loadSave, persistSave, resetSave } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
-import { customerGradeConfig, rollCustomerGrade, type CustomerGrade } from './customers';
+import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, designBonusFor, designUpgradeCost, drinkPriceFor } from './decor';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
@@ -107,8 +107,8 @@ export class GameState {
     return this.data.dealers.find((d) => d.id === table.dealerId) ?? null;
   }
 
-  customerGradeFor(table: TableInstance): CustomerGrade | null {
-    return table.customerGrade;
+  customerGradesFor(table: TableInstance): readonly CustomerGrade[] {
+    return table.customerGrades;
   }
 
   tableIncomePerSecond(table: TableInstance): number {
@@ -119,16 +119,18 @@ export class GameState {
     if (dealer === null) {
       return base * dealerMultiplier(tier, null) * this.data.prestigeMultiplier;
     }
-    const customerMult = table.customerGrade ? customerGradeConfig(table.customerGrade).spendMultiplier : 1;
+    // 착석한 손님 최대 8명의 평균 씀씀이 배율을 적용 (한 명 등급에 좌우되지 않고 테이블 전체 분위기를 반영).
+    const grades = table.customerGrades;
+    const customerMult =
+      grades.length > 0 ? grades.reduce((sum, g) => sum + customerGradeConfig(g).spendMultiplier, 0) / grades.length : 1;
     const dealerMult = dealerMultiplier(tier, dealer) * jobs.dealerEff * customerMult;
     return base * dealerMult * this.data.prestigeMultiplier;
   }
 
-  /** 착석한 손님들의 drinkMultiplier 합 (바 매출 계산용). */
+  /** 착석한 손님들의 drinkMultiplier 합 (바 매출 계산용). 손님이 많을수록 바 매출도 커진다. */
   private seatedDrinkMultiplierSum(): number {
     return this.data.tables.reduce((sum, t) => {
-      if (!t.customerGrade) return sum;
-      return sum + customerGradeConfig(t.customerGrade).drinkMultiplier;
+      return sum + t.customerGrades.reduce((s, g) => s + customerGradeConfig(g).drinkMultiplier, 0);
     }, 0);
   }
 
@@ -210,7 +212,7 @@ export class GameState {
     const cost = this.nextTableCost();
     if (cost === null || this.data.cash < cost) return false;
     this.data.cash -= cost;
-    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, lastTapAt: 0, customerGrade: null });
+    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, lastTapAt: 0, customerGrades: [] });
     return true;
   }
 
@@ -261,7 +263,7 @@ export class GameState {
       const prevTable = this.data.tables.find((t) => t.id === dealer.assignedTableId);
       if (prevTable) {
         prevTable.dealerId = null;
-        prevTable.customerGrade = null;
+        prevTable.customerGrades = [];
       }
     }
 
@@ -273,8 +275,8 @@ export class GameState {
         if (otherDealer) otherDealer.assignedTableId = null;
       }
       table.dealerId = dealer.id;
-      // 딜러가 새로 배정되면 매장 디자인 레벨에 따라 손님 등급을 새로 뽑는다.
-      table.customerGrade = rollCustomerGrade(designBonusFor(this.data.designLevel));
+      // 딜러가 새로 배정되면 매장 디자인 레벨에 따라 손님 8명을 새로 뽑는다 (홀덤 8인 테이블).
+      table.customerGrades = rollCustomerGrades(SEATS_PER_TABLE, designBonusFor(this.data.designLevel));
     }
 
     dealer.assignedTableId = tableId;
