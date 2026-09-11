@@ -20,6 +20,7 @@ export class HUD {
   private tab: Tab = 'table';
   private ownedFilter: OwnedFilter = 'all';
   private gradeFilter: GradeFilter = 'all';
+  private suppressScrollRestore = false;
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -64,6 +65,7 @@ export class HUD {
 
     if (action === 'set-tab' && btn.dataset.tab) {
       this.tab = btn.dataset.tab as Tab;
+      this.suppressScrollRestore = true;
       this.render();
       return;
     }
@@ -352,6 +354,11 @@ export class HUD {
     const tabContent =
       this.tab === 'table' ? this.renderTableTab() : this.tab === 'dealer' ? this.renderDealerTab() : this.renderVenueTab();
 
+    // 전체 다시 그리기 전에 스크롤 위치를 저장해뒀다가 그대로 복원 (강화 버튼 눌렀을 때 목록이 맨 위로 튀는 문제 방지).
+    // 단, 탭을 새로 전환한 경우엔 새 탭이니 위에서부터 보여준다.
+    const prevScroll = this.suppressScrollRestore ? 0 : this.root.querySelector('.tab-content')?.scrollTop ?? 0;
+    this.suppressScrollRestore = false;
+
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
 
@@ -374,5 +381,8 @@ export class HUD {
         </button>
       </nav>
     `;
+
+    const newTabContent = this.root.querySelector('.tab-content');
+    if (newTabContent) newTabContent.scrollTop = prevScroll;
   }
 }
