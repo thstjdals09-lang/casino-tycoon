@@ -5,7 +5,7 @@ import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
-import { barIncomePerSecond, barUpgradeCost, designBonusFor, designUpgradeCost, drinkPriceFor } from './decor';
+import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
 import { rollTemplate, templateById, type SpecialtyType } from './dealerRoster';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
@@ -259,6 +259,14 @@ export class GameState {
 
   drinkPrice(): number {
     return drinkPriceFor(this.data.barLevel);
+  }
+
+  unlockedDrinks() {
+    return unlockedDrinks(this.data.barLevel);
+  }
+
+  barVisualTier() {
+    return barVisualTier(this.data.barLevel);
   }
 
   designUpgradeCost(): number {

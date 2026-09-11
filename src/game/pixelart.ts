@@ -115,18 +115,28 @@ export function chipStackGrid(): PixelGrid {
   ];
 }
 
-/** 미니바 카운터 (병 + 카운터). width 16 x height 10. */
-export function barCounterGrid(): PixelGrid {
-  return [
-    fillRow(16, '.', { 3: 'x', 6: 'y', 9: 'z', 12: 'x' }), // 병들
-    fillRow(16, '.', { 3: 'x', 6: 'y', 9: 'z', 12: 'x' }),
-    fillRow(16, 'w'), // 선반
-    fillRow(16, '.'),
-    fillRow(16, 'r', { 0: '.', 15: '.' }),
-    fillRow(16, 'r', { 0: '.', 15: '.' }),
-    fillRow(16, 'r'),
-    fillRow(16, 'r'),
-  ];
+/** 미니바 카운터 (병 + 카운터). tier가 오를수록 폭이 넓어지고 병 종류가 늘어난다. tier: 1=기본, 2=칵테일바, 3=고급 라운지. */
+export function barCounterGrid(tier: 1 | 2 | 3 = 1): PixelGrid {
+  const width = tier === 1 ? 16 : tier === 2 ? 22 : 28;
+  const bottleSpacing = tier === 1 ? 3 : 2;
+  const bottleRow1 = fillRow(width, '.');
+  const bottleRow2 = fillRow(width, '.');
+  const arr1 = bottleRow1.split('');
+  const arr2 = bottleRow2.split('');
+  const colors = ['x', 'y', 'z', 'g'];
+  let ci = 0;
+  for (let x = 2; x < width - 2; x += bottleSpacing) {
+    arr1[x] = colors[ci % colors.length];
+    arr2[x] = colors[ci % colors.length];
+    ci++;
+  }
+  const rows: string[] = [arr1.join(''), arr2.join(''), fillRow(width, 'w'), fillRow(width, '.')];
+  const rimRows = tier === 3 ? 4 : 3;
+  for (let i = 0; i < rimRows; i++) {
+    rows.push(fillRow(width, 'r', { 0: '.', [width - 1]: '.' }));
+  }
+  rows.push(fillRow(width, 'r'));
+  return rows;
 }
 
 /** 벽에 거는 액자(그림). 인테리어 레벨이 오르면 하나씩 늘어나는 장식. 10x12. */

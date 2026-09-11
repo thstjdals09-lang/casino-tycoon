@@ -461,7 +461,8 @@ export class HUD {
       </button>
 
       <h3 class="section-title">🍸 미니바 (Lv.${gs.barLevel})</h3>
-      <p class="tab-caption">${gs.barLevel > 0 ? `현재 음료 가격 ${formatCash(gs.drinkPrice())} · 초당 매출 ${formatCash(gs.barIncomePerSecond())}` : '아직 바가 없습니다. 업그레이드하면 음료 판매를 시작합니다.'}</p>
+      <p class="tab-caption">${gs.barLevel > 0 ? `현재 음료 가격 ${formatCash(gs.drinkPrice())} · 초당 매출 ${formatCash(gs.barIncomePerSecond())}` : '아직 바가 없습니다. 업그레이드하면 바가 생기고 음료 판매를 시작합니다.'}</p>
+      ${gs.barLevel > 0 ? `<p class="tab-caption">🍹 취급 메뉴: ${gs.unlockedDrinks().map((d) => d.name).join(' · ')}</p>` : ''}
       <button class="big-action bar" data-action="upgrade-bar" data-cost="${barCost}" ${gs.cash < barCost ? 'disabled' : ''}>
         🍹 바 업그레이드${this.multLabel()} (${formatCash(barCost)}~)
       </button>

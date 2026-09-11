@@ -5,6 +5,7 @@ import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
 import { customerGradeConfig } from '../game/customers';
 import { ensurePixelTexture, barCounterGrid, chandelierGrid, chipStackGrid, floorTileGrid, frameGrid, humanoidGrid, plantGrid, tableGrid } from '../game/pixelart';
+import { barVisualTier } from '../game/decor';
 import type { TableInstance, VenueTierConfig } from '../game/types';
 
 const SLOT_W = 170;
@@ -62,6 +63,7 @@ export class MainScene extends Phaser.Scene {
   private timeSinceSave = 0;
   private lastTierId = -1;
   private lastDesignLevel = -1;
+  private lastBarLevel = -1;
   private tablePositions = new Map<number, { x: number; y: number }>();
   private dragStartY = 0;
   private dragStartScroll = 0;
@@ -154,7 +156,9 @@ export class MainScene extends Phaser.Scene {
       const accessory = g === 'S' ? 'hat' : 'none';
       ensurePixelTexture(this, `customer-${g}`, humanoidGrid(accessory), { ...HUMANOID_PALETTE_BASE, v: color, c: '#ffd700' }, 5);
     });
-    ensurePixelTexture(this, 'bar-counter', barCounterGrid(), { r: '#c9a227', w: '#3a0f16', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0' }, 6);
+    ensurePixelTexture(this, 'bar-tier-1', barCounterGrid(1), { r: '#c9a227', w: '#3a0f16', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0', g: '#f5f5f5' }, 6);
+    ensurePixelTexture(this, 'bar-tier-2', barCounterGrid(2), { r: '#c9a227', w: '#4a1420', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0', g: '#c264ff' }, 6);
+    ensurePixelTexture(this, 'bar-tier-3', barCounterGrid(3), { r: '#ffd966', w: '#4a1420', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0', g: '#c264ff' }, 6);
     ensurePixelTexture(this, 'plant-decor', plantGrid(), { l: '#4caf6b', t: '#2e7d4f', p: '#c56a3b' }, 6);
     ensurePixelTexture(this, 'frame-decor', frameGrid(), { g: '#c9a227', c: '#2f6b8a', h: '#e8c99b' }, 5);
     ensurePixelTexture(this, 'chandelier-decor', chandelierGrid(), { r: '#8b5a2b', g: '#ffd966', c: '#f5f5f5' }, 5);
@@ -180,9 +184,17 @@ export class MainScene extends Phaser.Scene {
     const { width } = this.scale;
     const tier = gameState.tier;
     const designLevel = gameState.designLevel;
+    const barTier = barVisualTier(gameState.barLevel);
 
-    const bar = this.add.image(width / 2, 4, 'bar-counter').setOrigin(0.5, 0);
-    this.decor.add(bar);
+    if (barTier > 0) {
+      const bar = this.add.image(width / 2, 4, `bar-tier-${barTier}`).setOrigin(0.5, 0);
+      this.decor.add(bar);
+      if (barTier >= 3) {
+        const sparkle = this.add.text(width / 2 + 60, 6, '✨', { fontSize: '11px' }).setOrigin(0.5);
+        this.tweens.add({ targets: sparkle, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
+        this.decor.add(sparkle);
+      }
+    }
 
     // 인테리어 레벨이 오르면 샹들리에가 바 위쪽에 작게 걸림 (세로 공간이 좁아서 겹치듯 배치).
     if (designLevel >= 10) {
@@ -293,8 +305,10 @@ export class MainScene extends Phaser.Scene {
     const tier = gameState.tier;
     const tierChanged = tier.id !== this.lastTierId;
     const designChanged = gameState.designLevel !== this.lastDesignLevel;
-    if (tierChanged || designChanged) {
+    const barChanged = gameState.barLevel !== this.lastBarLevel;
+    if (tierChanged || designChanged || barChanged) {
       this.lastDesignLevel = gameState.designLevel;
+      this.lastBarLevel = gameState.barLevel;
       this.buildDecor();
     }
     if (tierChanged) {
