@@ -16,6 +16,11 @@ export interface OfflineEarningsResult {
   earned: number;
 }
 
+export interface DailyLoginResult {
+  streak: number;
+  reward: number;
+}
+
 export interface GachaResult {
   dealerId: number;
   grade: DealerGrade;
@@ -26,6 +31,9 @@ export class GameState {
   private lastGacha: GachaResult | null = null;
   private lastUnlockedAchievements: AchievementConfig[] = [];
   private autoSaveDisabled = false;
+  // 부스트(황금시간)는 세이브하지 않는 일시적 상태.
+  private boostActiveUntil = 0;
+  private boostCooldownUntil = 0;
 
   constructor() {
     this.data = loadSave() ?? createNewSave();
@@ -81,6 +89,61 @@ export class GameState {
 
   get barLevel(): number {
     return this.data.barLevel;
+  }
+
+  get loginStreak(): number {
+    return this.data.loginStreak;
+  }
+
+  isBoostActive(): boolean {
+    return Date.now() < this.boostActiveUntil;
+  }
+
+  boostSecondsRemaining(): number {
+    return Math.max(0, Math.ceil((this.boostActiveUntil - Date.now()) / 1000));
+  }
+
+  boostCooldownSecondsRemaining(): number {
+    return Math.max(0, Math.ceil((this.boostCooldownUntil - Date.now()) / 1000));
+  }
+
+  canActivateBoost(): boolean {
+    return Date.now() >= this.boostCooldownUntil;
+  }
+
+  /** 60초간 전체 수익 2배 부스트. 재사용 대기 5분(부스트 시간 포함). */
+  activateBoost(): boolean {
+    if (!this.canActivateBoost()) return false;
+    const now = Date.now();
+    this.boostActiveUntil = now + 60_000;
+    this.boostCooldownUntil = now + 5 * 60_000;
+    return true;
+  }
+
+  /**
+   * 하루 한 번, 새로운 날짜에 처음 접속했을 때 출석 보상을 지급한다.
+   * 이미 오늘 받았으면 null. 날짜는 로컬 기준(YYYY-MM-DD)으로 비교.
+   */
+  claimDailyLogin(): DailyLoginResult | null {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.data.lastLoginDate === today) return null;
+
+    const isConsecutive = (() => {
+      if (!this.data.lastLoginDate) return false;
+      const prev = new Date(this.data.lastLoginDate);
+      const diffDays = Math.round((new Date(today).getTime() - prev.getTime()) / 86_400_000);
+      return diffDays === 1;
+    })();
+
+    this.data.loginStreak = isConsecutive ? this.data.loginStreak + 1 : 1;
+    this.data.lastLoginDate = today;
+
+    const cappedStreak = Math.min(this.data.loginStreak, 7);
+    const reward = this.totalIncomePerSecond() * 60 * (1 + cappedStreak * 0.15) + 20 * cappedStreak;
+    this.data.cash += reward;
+    this.data.totalEarned += reward;
+
+    return { streak: this.data.loginStreak, reward };
   }
 
   achievementList(): AchievementConfig[] {
@@ -171,7 +234,8 @@ export class GameState {
     const jobsIncome = this.jobMultipliers().income;
     const tableIncome = raw * collectionMultiplier(this.data.dealers) * jobsIncome * achievementMultiplier(this.data.achievements);
     const barIncome = this.barIncomePerSecond() * jobsIncome;
-    return tableIncome + barIncome;
+    const boostMult = this.isBoostActive() ? 2 : 1;
+    return (tableIncome + barIncome) * boostMult;
   }
 
   nextTableCost(): number | null {

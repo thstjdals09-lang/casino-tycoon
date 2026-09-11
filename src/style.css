@@ -358,6 +358,24 @@ select {
   border-color: #a83350;
 }
 
+.big-action.boost {
+  background: linear-gradient(180deg, #ffb347, #d9770a);
+  border-color: #a85c06;
+  font-size: 12px;
+}
+
+.boost-active {
+  width: 100%;
+  text-align: center;
+  background: linear-gradient(180deg, #ffb347, #d9770a);
+  border: 2px solid #a85c06;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #2a0d13;
+}
+
 .danger-btn {
   width: 100%;
   margin-top: 14px;

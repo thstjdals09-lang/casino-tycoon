@@ -5,9 +5,7 @@ import { MainScene } from './scenes/MainScene';
 import { HUD } from './ui/HUD';
 
 const offline = gameState.consumeOfflineEarnings();
-if (offline.earned > 0) {
-  console.info(`오프라인 수익: +${Math.floor(offline.earned).toLocaleString('ko-KR')}원`);
-}
+const daily = gameState.claimDailyLogin();
 gameState.save();
 
 new Phaser.Game({
@@ -26,6 +24,7 @@ new Phaser.Game({
 
 const hudRoot = document.querySelector<HTMLDivElement>('#hud')!;
 const hud = new HUD(hudRoot, gameState);
+hud.showWelcomeBack(offline, daily);
 setInterval(() => hud.refresh(), 250);
 
 window.addEventListener('beforeunload', () => gameState.save());

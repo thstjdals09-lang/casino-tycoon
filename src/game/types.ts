@@ -61,4 +61,8 @@ export interface GameSaveData {
   designLevel: number;
   /** 미니바 레벨. 높을수록 더 비싼 음료를 판매해 초당 수익이 오름. 매장 확장해도 유지됨. */
   barLevel: number;
+  /** 마지막으로 출석 보상을 받은 날짜 (YYYY-MM-DD, 로컬 기준). */
+  lastLoginDate: string;
+  /** 연속 출석일수. */
+  loginStreak: number;
 }

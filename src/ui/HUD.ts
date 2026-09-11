@@ -1,4 +1,4 @@
-import { GameState } from '../game/GameState';
+import { GameState, type DailyLoginResult, type OfflineEarningsResult } from '../game/GameState';
 import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
@@ -22,6 +22,8 @@ export class HUD {
   private gradeFilter: GradeFilter = 'all';
   private suppressScrollRestore = false;
   private settingsOpen = false;
+  private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
+  private lastBoostState: 'active' | 'ready' | 'cooldown' = 'ready';
 
   constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
@@ -55,6 +57,28 @@ export class HUD {
     if (bar && advanceCost !== null) {
       bar.style.width = `${Math.min(100, (gs.cash / advanceCost) * 100)}%`;
     }
+
+    // 부스트 상태(작동중/쿨다운/사용가능)가 바뀌면 버튼 구조 자체가 달라져야 하니 전체 다시 그리기.
+    const boostState = gs.isBoostActive() ? 'active' : gs.canActivateBoost() ? 'ready' : 'cooldown';
+    if (boostState !== this.lastBoostState) {
+      this.lastBoostState = boostState;
+      this.render();
+      return;
+    }
+    const boostTimer = this.root.querySelector('#boost-timer');
+    if (boostTimer) {
+      boostTimer.textContent = String(gs.isBoostActive() ? gs.boostSecondsRemaining() : gs.boostCooldownSecondsRemaining());
+    }
+  }
+
+  /**
+   * 게임 시작 시 1회 호출. 오프라인 수익이 있거나 오늘 첫 접속(출석 보상)이면 환영 모달을 띄운다.
+   */
+  showWelcomeBack(offline: OfflineEarningsResult, daily: DailyLoginResult | null): void {
+    if (offline.earned > 0 || daily) {
+      this.welcomeBack = { offline, daily };
+      this.render();
+    }
   }
 
   private onClick(e: Event) {
@@ -64,6 +88,11 @@ export class HUD {
     const action = btn.dataset.action;
     const id = btn.dataset.id !== undefined ? Number(btn.dataset.id) : undefined;
 
+    if (action === 'close-welcome') {
+      this.welcomeBack = null;
+      this.render();
+      return;
+    }
     if (action === 'open-settings') {
       this.settingsOpen = true;
       this.render();
@@ -116,6 +145,9 @@ export class HUD {
         break;
       case 'upgrade-bar':
         changed = this.gameState.upgradeBar();
+        break;
+      case 'activate-boost':
+        changed = this.gameState.activateBoost();
         break;
       case 'reset-game':
         if (window.confirm('정말 초기화할까요? 현금/테이블/딜러/전직/도감이 전부 사라지고 처음부터 다시 시작합니다.')) {
@@ -173,6 +205,12 @@ export class HUD {
     const tier = gs.tier;
     const nextTableCost = gs.nextTableCost();
 
+    const boostHtml = gs.isBoostActive()
+      ? `<div class="boost-active" id="boost-status">🔥 황금시간 작동 중 · <span id="boost-timer">${gs.boostSecondsRemaining()}</span>초 남음 (수익 2배)</div>`
+      : `<button class="big-action boost" data-action="activate-boost" ${gs.canActivateBoost() ? '' : 'disabled'} id="boost-btn">
+           🔥 황금시간 발동 (60초간 수익 2배)${gs.canActivateBoost() ? '' : ` · <span id="boost-timer">${gs.boostCooldownSecondsRemaining()}</span>초 후 재사용`}
+         </button>`;
+
     const rows = gs.tables
       .map((t) => {
         const income = gs.tableIncomePerSecond(t);
@@ -221,6 +259,7 @@ export class HUD {
       .join('');
 
     return `
+      ${boostHtml}
       <button class="big-action" data-action="buy-table" data-cost="${nextTableCost ?? Infinity}" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
         + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
       </button>
@@ -386,6 +425,29 @@ export class HUD {
       </div>`;
   }
 
+  private renderWelcomeModal(): string {
+    if (!this.welcomeBack) return '';
+    const { offline, daily } = this.welcomeBack;
+    const offlineLine =
+      offline.earned > 0
+        ? `<div class="job-desc">⏱️ 자리를 비운 동안(${Math.round(offline.elapsedMs / 60000)}분) <b>${formatCash(offline.earned)}</b> 벌었어요.</div>`
+        : '';
+    const dailyLine = daily
+      ? `<div class="job-desc">📅 ${daily.streak}일 연속 출석! 보상 <b>${formatCash(daily.reward)}</b> 지급됐어요.</div>`
+      : '';
+    return `
+      <div class="job-modal">
+        <div class="job-modal-inner">
+          <h2>👋 어서오세요!</h2>
+          <div class="job-cards">
+            ${offlineLine}
+            ${dailyLine}
+          </div>
+          <button class="close-settings-btn" data-action="close-welcome">확인</button>
+        </div>
+      </div>`;
+  }
+
   private renderSettingsModal(): string {
     if (!this.settingsOpen) return '';
     return `
@@ -419,6 +481,7 @@ export class HUD {
 
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
+      ${this.renderWelcomeModal()}
       ${this.renderSettingsModal()}
 
       <div class="stat-bar">
