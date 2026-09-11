@@ -337,12 +337,14 @@ export class HUD {
             ? '<p class="final-tier">전직을 먼저 선택해야 매장을 확장할 수 있습니다. (딜러 탭 옆 팝업 확인)</p>'
             : advanceCost === null
             ? '<p class="final-tier">🏆 국내 최고 카지노에 도달했습니다!</p>'
+            : gs.tables.length < tier.maxTables
+            ? `<p class="final-tier">테이블을 꽉 채우면(${gs.tables.length}/${tier.maxTables}) 다음 층으로 확장할 수 있습니다.</p>`
             : `
           <div class="advance-progress">
             <div class="advance-progress-bar" id="advance-bar" style="width:${Math.min(100, (gs.cash / advanceCost) * 100)}%"></div>
           </div>
           <button class="advance-btn" data-action="advance-venue" data-cost="${advanceCost}" ${gs.canAdvanceVenue() ? '' : 'disabled'}>
-            🏗️ 매장 확장 (${formatCash(advanceCost)}) · 확장 시 인테리어/바 레벨 초기화
+            🏗️ 다음 층으로 확장 (${formatCash(advanceCost)}) · 테이블/딜러/인테리어/바 그대로 유지
           </button>`
         }
       </div>`;

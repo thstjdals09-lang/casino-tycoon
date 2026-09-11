@@ -195,6 +195,7 @@ export class GameState {
 
   canAdvanceVenue(): boolean {
     if (this.pendingJobChoices() !== null) return false; // 전직 선택 전에는 매장 확장 불가
+    if (this.data.tables.length < this.tier.maxTables) return false; // 지금 층 테이블을 다 채워야 다음 층으로
     const cost = this.tier.advanceCost;
     if (cost === null) return false;
     return this.data.cash >= cost;
@@ -293,15 +294,12 @@ export class GameState {
   advanceVenue(): boolean {
     if (!this.canAdvanceVenue()) return false;
     const tier = this.tier;
+    const cost = tier.advanceCost ?? 0;
+    this.data.cash -= cost;
     this.data.prestigeMultiplier *= tier.advanceBonusMultiplier;
     this.data.venueTierIndex += 1;
-    this.data.cash = 0;
-    this.data.tables = [{ id: 0, level: 1, dealerId: null, lastTapAt: 0, customerGrade: null }];
-    this.data.dealers = [];
-    this.data.nextTableId = 1;
-    this.data.nextDealerId = 0;
-    this.data.designLevel = 0;
-    this.data.barLevel = 0;
+    // 초기화 없이 누적 성장: 테이블/딜러/디자인/바를 그대로 유지한 채 다음 층으로 넘어간다.
+    // 새 층은 maxTables가 더 커서 그만큼 테이블을 더 살 수 있는 자리가 열린다.
     return true;
   }
 

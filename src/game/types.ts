@@ -57,8 +57,8 @@ export interface GameSaveData {
   dealerPulls: Record<DealerGrade, number>;
   /** 달성한 업적 id 목록. */
   achievements: string[];
-  /** 매장 인테리어(디자인) 업그레이드 레벨. 높을수록 고급 손님 등급 확률 상승. 매장 확장 시 초기화. */
+  /** 매장 인테리어(디자인) 업그레이드 레벨. 높을수록 고급 손님 등급 확률 상승. 매장 확장해도 유지됨. */
   designLevel: number;
-  /** 미니바 레벨. 높을수록 더 비싼 음료를 판매해 초당 수익이 오름. 매장 확장 시 초기화. */
+  /** 미니바 레벨. 높을수록 더 비싼 음료를 판매해 초당 수익이 오름. 매장 확장해도 유지됨. */
   barLevel: number;
 }
