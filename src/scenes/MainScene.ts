@@ -4,7 +4,7 @@ import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
 import { customerGradeConfig } from '../game/customers';
-import { ensurePixelTexture, barCounterGrid, chipStackGrid, floorTileGrid, humanoidGrid, tableGrid } from '../game/pixelart';
+import { ensurePixelTexture, barCounterGrid, chandelierGrid, chipStackGrid, floorTileGrid, frameGrid, humanoidGrid, plantGrid, tableGrid } from '../game/pixelart';
 import type { TableInstance, VenueTierConfig } from '../game/types';
 
 const SLOT_W = 170;
@@ -61,6 +61,7 @@ export class MainScene extends Phaser.Scene {
   private hasInitialized = false;
   private timeSinceSave = 0;
   private lastTierId = -1;
+  private lastDesignLevel = -1;
   private tablePositions = new Map<number, { x: number; y: number }>();
   private dragStartY = 0;
   private dragStartScroll = 0;
@@ -153,6 +154,9 @@ export class MainScene extends Phaser.Scene {
       ensurePixelTexture(this, `customer-${g}`, humanoidGrid(accessory), { ...HUMANOID_PALETTE_BASE, v: color, c: '#ffd700' }, 5);
     });
     ensurePixelTexture(this, 'bar-counter', barCounterGrid(), { r: '#c9a227', w: '#3a0f16', x: '#e0455c', y: '#4ecb9a', z: '#4f8fe0' }, 6);
+    ensurePixelTexture(this, 'plant-decor', plantGrid(), { l: '#4caf6b', t: '#2e7d4f', p: '#c56a3b' }, 6);
+    ensurePixelTexture(this, 'frame-decor', frameGrid(), { g: '#c9a227', c: '#2f6b8a', h: '#e8c99b' }, 5);
+    ensurePixelTexture(this, 'chandelier-decor', chandelierGrid(), { r: '#8b5a2b', g: '#ffd966', c: '#f5f5f5' }, 5);
   }
 
   private ensureTableTexture(tierId: number): string {
@@ -174,16 +178,38 @@ export class MainScene extends Phaser.Scene {
     this.decor.removeAll(true);
     const { width } = this.scale;
     const tier = gameState.tier;
+    const designLevel = gameState.designLevel;
+
     const bar = this.add.image(width / 2, 4, 'bar-counter').setOrigin(0.5, 0);
     this.decor.add(bar);
-    // 층이 높을수록 칩 장식이 더 많이 붙어서 매장이 점점 화려해지는 느낌을 준다.
-    const chipCount = 2 + tier.id;
-    for (let i = 0; i < chipCount; i++) {
-      const t = chipCount === 1 ? 0.5 : i / (chipCount - 1);
-      const x = 28 + t * (width - 56);
-      if (Math.abs(x - width / 2) < 60) continue; // 바 카운터 자리는 비워둠
-      this.decor.add(this.add.image(x, 8, 'chip-decor').setOrigin(0.5, 0));
+
+    // 인테리어 레벨이 오르면 샹들리에가 바 위쪽에 작게 걸림 (세로 공간이 좁아서 겹치듯 배치).
+    if (designLevel >= 10) {
+      this.decor.add(this.add.image(width / 2, 0, 'chandelier-decor').setOrigin(0.5, 0).setScale(0.5).setDepth(5));
     }
+
+    // 좌우로 퍼지는 장식 한 줄: 기본은 칩 스택이고, 인테리어 레벨이 오를수록 화분/액자가 섞여 들어가
+    // 매장이 점점 화려해지는 느낌을 준다. 층(티어)이 높을수록 장식 개수 자체도 늘어남.
+    const decorKeys: string[] = [];
+    const chipCount = 2 + tier.id;
+    for (let i = 0; i < chipCount; i++) decorKeys.push('chip-decor');
+    if (designLevel >= 3) decorKeys.push('plant-decor', 'plant-decor');
+    if (designLevel >= 6) {
+      const frameCount = Math.min(4, 1 + Math.floor((designLevel - 6) / 4));
+      for (let i = 0; i < frameCount; i++) decorKeys.push('frame-decor');
+    }
+
+    const scaleFor = (key: string) => (key === 'frame-decor' ? 0.5 : 1);
+    const slots = decorKeys.length + 1; // +1은 바 카운터 자리
+    const centerSlot = Math.floor(slots / 2);
+    let slotIdx = 0;
+    decorKeys.forEach((key) => {
+      if (slotIdx === centerSlot) slotIdx++; // 바 카운터 자리는 건너뜀
+      const t = slots <= 1 ? 0.5 : slotIdx / (slots - 1);
+      const x = 26 + t * (width - 52);
+      this.decor.add(this.add.image(x, 8, key).setOrigin(0.5, 0).setScale(scaleFor(key)));
+      slotIdx++;
+    });
   }
 
   private showFloorChangeToast(tier: VenueTierConfig) {
@@ -265,10 +291,14 @@ export class MainScene extends Phaser.Scene {
   private rebuildLayout() {
     const tier = gameState.tier;
     const tierChanged = tier.id !== this.lastTierId;
+    const designChanged = gameState.designLevel !== this.lastDesignLevel;
+    if (tierChanged || designChanged) {
+      this.lastDesignLevel = gameState.designLevel;
+      this.buildDecor();
+    }
     if (tierChanged) {
       const isRealAdvance = this.hasInitialized && this.lastTierId !== -1;
       this.lastTierId = tier.id;
-      this.buildDecor();
       this.floorSprite.setTexture(this.ensureFloorTexture(tier.id, tier.floorColor));
       this.cameras.main.setBackgroundColor(tier.floorColor);
       this.floorPlaqueTitle.setText(`🏢 ${tier.id + 1}층`);

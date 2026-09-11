@@ -6,6 +6,7 @@ import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMulti
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, designBonusFor, designUpgradeCost, drinkPriceFor } from './decor';
+import { rollTemplate, templateById, type SpecialtyType } from './dealerRoster';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 2000;
@@ -174,6 +175,22 @@ export class GameState {
     return table.customerGrades;
   }
 
+  /**
+   * 이름 붙은 딜러들의 특수효과 배율. income/bar/tap은 "배치"된 딜러만, gacha는 "보유"만 해도 적용(보유효과).
+   * 여러 명이면 합연산으로 누적(1 + 합).
+   */
+  private specialtyMultiplier(type: SpecialtyType): number {
+    const requiresAssignment = type !== 'gacha';
+    let bonus = 0;
+    for (const d of this.data.dealers) {
+      if (requiresAssignment && d.assignedTableId === null) continue;
+      const t = templateById(d.templateId);
+      if (t.specialty !== type) continue;
+      bonus += t.specialtyValue;
+    }
+    return 1 + bonus;
+  }
+
   tableIncomePerSecond(table: TableInstance): number {
     const tier = this.tier;
     const dealer = this.dealerFor(table);
@@ -198,7 +215,7 @@ export class GameState {
   }
 
   barIncomePerSecond(): number {
-    return barIncomePerSecond(this.data.barLevel, this.seatedDrinkMultiplierSum());
+    return barIncomePerSecond(this.data.barLevel, this.seatedDrinkMultiplierSum()) * this.specialtyMultiplier('bar');
   }
 
   drinkPrice(): number {
@@ -232,7 +249,12 @@ export class GameState {
   totalIncomePerSecond(): number {
     const raw = this.data.tables.reduce((sum, t) => sum + this.tableIncomePerSecond(t), 0);
     const jobsIncome = this.jobMultipliers().income;
-    const tableIncome = raw * collectionMultiplier(this.data.dealers) * jobsIncome * achievementMultiplier(this.data.achievements);
+    const tableIncome =
+      raw *
+      collectionMultiplier(this.data.dealers) *
+      jobsIncome *
+      achievementMultiplier(this.data.achievements) *
+      this.specialtyMultiplier('income');
     const barIncome = this.barIncomePerSecond() * jobsIncome;
     const boostMult = this.isBoostActive() ? 2 : 1;
     return (tableIncome + barIncome) * boostMult;
@@ -290,13 +312,15 @@ export class GameState {
     return true;
   }
 
-  /** 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직 효과로 고급 등급 확률이 오를 수 있다. */
+  /** 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다. */
   pullDealer(): GachaResult | null {
     const cost = this.nextGachaCost();
     if (this.data.cash < cost) return null;
     this.data.cash -= cost;
-    const grade = rollGrade(this.jobMultipliers().gacha);
-    const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, assignedTableId: null };
+    const gachaRate = this.jobMultipliers().gacha * this.specialtyMultiplier('gacha');
+    const grade = rollGrade(gachaRate);
+    const template = rollTemplate(grade);
+    const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, templateId: template.id, assignedTableId: null };
     this.data.dealers.push(dealer);
     this.data.dealerPulls[grade] += 1;
 
@@ -352,7 +376,7 @@ export class GameState {
     const now = Date.now();
     if (now - table.lastTapAt < TAP_COOLDOWN_MS) return 0;
     table.lastTapAt = now;
-    const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS * this.jobMultipliers().tap;
+    const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS * this.jobMultipliers().tap * this.specialtyMultiplier('tap');
     this.data.cash += bonus;
     this.data.totalEarned += bonus;
     return bonus;

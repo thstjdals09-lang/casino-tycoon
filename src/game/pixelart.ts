@@ -129,6 +129,31 @@ export function barCounterGrid(): PixelGrid {
   ];
 }
 
+/** 벽에 거는 액자(그림). 인테리어 레벨이 오르면 하나씩 늘어나는 장식. 10x12. */
+export function frameGrid(): PixelGrid {
+  const rows: string[] = [];
+  rows.push(cutCorners(10, 'g', 1));
+  for (let i = 0; i < 8; i++) {
+    rows.push(i === 3 ? fillRow(10, 'c', { 0: 'g', 9: 'g', 4: 'h', 5: 'h' }) : fillRow(10, 'c', { 0: 'g', 9: 'g' }));
+  }
+  rows.push(cutCorners(10, 'g', 1));
+  return rows;
+}
+
+/** 샹들리에(천장 조명). 인테리어 최상급 장식. 14x8. */
+export function chandelierGrid(): PixelGrid {
+  const rows: string[] = [];
+  rows.push(fillRow(14, '.', { 6: 'r', 7: 'r' }));
+  rows.push(fillRow(14, '.', { 5: 'r', 6: 'r', 7: 'r', 8: 'r' }));
+  rows.push(cutCorners(14, 'g', 3));
+  rows.push(fillRow(14, 'g', { 0: '.', 13: '.' }));
+  for (let i = 0; i < 2; i++) {
+    rows.push(fillRow(14, '.', { 2: 'c', 5: 'c', 8: 'c', 11: 'c' }));
+  }
+  rows.push(cutCorners(14, 'g', 4));
+  return rows;
+}
+
 export function ensurePixelTexture(
   scene: Phaser.Scene,
   key: string,

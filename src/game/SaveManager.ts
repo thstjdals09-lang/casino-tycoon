@@ -1,8 +1,8 @@
 import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
-const STORAGE_KEY = 'casino-tycoon-save-v6';
-const SAVE_VERSION = 6;
+const STORAGE_KEY = 'casino-tycoon-save-v7';
+const SAVE_VERSION = 7;
 
 export function createNewSave(): GameSaveData {
   return {

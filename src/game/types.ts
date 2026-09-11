@@ -14,6 +14,7 @@ export interface DealerInstance {
   id: number;
   level: number;
   grade: DealerGrade;
+  templateId: string;
   assignedTableId: number | null;
 }
 

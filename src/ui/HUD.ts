@@ -1,10 +1,13 @@
 import { GameState, type DailyLoginResult, type OfflineEarningsResult } from '../game/GameState';
 import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
-import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
+import { gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { customerGradeConfig } from '../game/customers';
+import { DEALER_ROSTER, specialtyMeta, templateById } from '../game/dealerRoster';
+
+const GRADE_ORDER: DealerGrade[] = ['SSR', 'SR', 'R', 'N'];
 
 type Tab = 'table' | 'dealer' | 'compendium' | 'venue';
 type OwnedFilter = 'all' | 'owned' | 'unowned';
@@ -215,17 +218,23 @@ export class HUD {
       .map((t) => {
         const income = gs.tableIncomePerSecond(t);
         const upgradeCost = gs.tableUpgradeCost(t);
-        const dealerOptions = gs.dealers
-          .map((d) => {
-            const label =
-              d.assignedTableId === null
-                ? '대기 중'
-                : d.assignedTableId === t.id
-                ? '이 테이블'
-                : `테이블 #${d.assignedTableId + 1}에서 이동`;
-            return `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>[${gradeConfig(d.grade).label}] 딜러 #${d.id + 1} (Lv.${d.level}) · ${label}</option>`;
-          })
-          .join('');
+        const dealerOptions = GRADE_ORDER.map((grade) => {
+          const inGrade = gs.dealers.filter((d) => d.grade === grade);
+          if (inGrade.length === 0) return '';
+          const options = inGrade
+            .map((d) => {
+              const label =
+                d.assignedTableId === null
+                  ? '대기 중'
+                  : d.assignedTableId === t.id
+                  ? '이 테이블'
+                  : `테이블 #${d.assignedTableId + 1}에서 이동`;
+              const name = templateById(d.templateId).name;
+              return `<option value="${d.id}" ${d.assignedTableId === t.id ? 'selected' : ''}>${name} (Lv.${d.level}) · ${label}</option>`;
+            })
+            .join('');
+          return `<optgroup label="${gradeConfig(grade).label} 등급">${options}</optgroup>`;
+        }).join('');
         const custBadge =
           t.customerGrades.length > 0
             ? (() => {
@@ -275,7 +284,9 @@ export class HUD {
     const flash = last
       ? (() => {
           const cfg = gradeConfig(last.grade);
-          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] 딜러 #${last.dealerId + 1} 획득!</div>`;
+          const dealer = gs.dealers.find((d) => d.id === last.dealerId);
+          const name = dealer ? templateById(dealer.templateId).name : '';
+          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] ${name} 획득!</div>`;
         })()
       : '';
 
@@ -283,15 +294,17 @@ export class HUD {
       .map((a) => `<div class="gacha-flash achievement-flash">🏆 업적 달성: ${a.name} (수익 x${a.incomeMultiplier})</div>`)
       .join('');
 
-    const rows = gs.dealers
+    const rows = GRADE_ORDER.flatMap((grade) => gs.dealers.filter((d) => d.grade === grade))
       .map((d) => {
         const upgradeCost = gs.dealerUpgradeCost(d);
         const cfg = gradeConfig(d.grade);
+        const template = templateById(d.templateId);
+        const meta = specialtyMeta(template.specialty);
         return `
           <div class="row">
             <div class="row-main">
-              <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] 딜러 #${d.id + 1} · Lv.${d.level}</span>
-              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중 (보유 효과만 적용)'}</span>
+              <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name} · Lv.${d.level}</span>
+              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중'} · ${meta.kind}: ${meta.label} +${(template.specialtyValue * 100).toFixed(0)}%p</span>
             </div>
             <div class="row-details">
               <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
@@ -315,6 +328,7 @@ export class HUD {
   private renderCompendiumTab(): string {
     const gs = this.gameState;
     const pulls = gs.dealerPulls;
+    const ownedTemplateIds = new Set(gs.dealers.map((d) => d.templateId));
 
     const achievementRows = ACHIEVEMENTS.map((a) => {
       const done = gs.achievements.includes(a.id);
@@ -328,31 +342,36 @@ export class HUD {
         </div>`;
     }).join('');
 
-    // 등급별 효과 도감: 보유(pulls>0)면 컬러, 미보유면 무채색.
-    const gradeCompendium = DEALER_GRADES.filter((g) => this.gradeFilter === 'all' || this.gradeFilter === g.grade)
-      .filter((g) => {
-        const owned = pulls[g.grade] > 0;
+    // 이름 붙은 딜러 개별 도감: 보유(해당 템플릿으로 한 번이라도 뽑음)면 컬러, 미보유면 무채색+실루엣.
+    const roster = [...DEALER_ROSTER].sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade));
+    const dealerCompendium = roster
+      .filter((t) => this.gradeFilter === 'all' || this.gradeFilter === t.grade)
+      .filter((t) => {
+        const owned = ownedTemplateIds.has(t.id);
         if (this.ownedFilter === 'owned') return owned;
         if (this.ownedFilter === 'unowned') return !owned;
         return true;
       })
-      .map((g) => {
-        const owned = pulls[g.grade] > 0;
-        const colorStyle = owned ? `color:${gradeHex(g.color)}` : 'color:#7a6a5a; filter:grayscale(1);';
-        const exampleLv1 = (1 + 1 * 0.25 * g.levelBonusMultiplier) * g.assignedMultiplier;
+      .map((t) => {
+        const owned = ownedTemplateIds.has(t.id);
+        const gcfg = gradeConfig(t.grade);
+        const count = gs.dealers.filter((d) => d.templateId === t.id).length;
+        const colorStyle = owned ? `color:${gradeHex(gcfg.color)}` : 'color:#7a6a5a; filter:grayscale(1);';
+        const meta = specialtyMeta(t.specialty);
         return `
           <div class="row compendium-row ${owned ? '' : 'row-unowned'}">
             <div class="row-main">
-              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${g.label}] · 보유 ${pulls[g.grade]}명</span>
+              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${gcfg.label}] ${t.name}${owned && count > 1 ? ` ×${count}` : ''}</span>
+              <span class="row-sub">${owned ? t.flavor : '???'}</span>
             </div>
             <div class="effect-detail">
-              <div class="effect-line">👜 <b>보유효과</b> (배치 안 해도 적용, 보유 개체수만큼 누적) — 전체 수익 +${(g.passiveMultiplier * 100).toFixed(1)}%p / 명</div>
-              <div class="effect-line">🪑 <b>배치효과</b> (테이블에 배정 시) — 기본 효율 배율 x${g.assignedMultiplier}</div>
-              <div class="effect-line">📈 <b>레벨업 배율</b> — 레벨당 상승폭 x${g.levelBonusMultiplier} (레벨 1 배치 시 대략 x${exampleLv1.toFixed(2)})</div>
+              <div class="effect-line">${meta.kind === '보유효과' ? '👜' : '🪑'} <b>${meta.kind}</b> — ${meta.label} +${(t.specialtyValue * 100).toFixed(0)}%p${meta.kind === '배치효과' ? ' (테이블에 배정 시)' : ' (보유만 해도 적용)'}</div>
             </div>
           </div>`;
       })
       .join('');
+
+    const ownedCount = DEALER_ROSTER.filter((t) => ownedTemplateIds.has(t.id)).length;
 
     const ownedFilterBtn = (f: OwnedFilter, label: string) =>
       `<button class="chip ${this.ownedFilter === f ? 'active' : ''}" data-action="set-owned-filter" data-filter="${f}">${label}</button>`;
@@ -360,14 +379,14 @@ export class HUD {
       `<button class="chip ${this.gradeFilter === f ? 'active' : ''}" data-action="set-grade-filter" data-filter="${f}">${label}</button>`;
 
     return `
-      <h3 class="section-title">📖 딜러 등급 도감</h3>
+      <h3 class="section-title">📖 딜러 도감 (${ownedCount}/${DEALER_ROSTER.length})</h3>
       <div class="filter-row">
         ${ownedFilterBtn('all', '전체')}${ownedFilterBtn('owned', '보유')}${ownedFilterBtn('unowned', '미보유')}
       </div>
       <div class="filter-row">
         ${gradeFilterBtn('all', '등급 전체')}${gradeFilterBtn('N', 'N')}${gradeFilterBtn('R', 'R')}${gradeFilterBtn('SR', 'SR')}${gradeFilterBtn('SSR', 'SSR')}
       </div>
-      <div class="row-list">${gradeCompendium}</div>
+      <div class="row-list">${dealerCompendium}</div>
 
       <h3 class="section-title">🏆 업적 (누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR})</h3>
       <div class="row-list">${achievementRows}</div>`;
@@ -395,7 +414,7 @@ export class HUD {
       </div>
 
       <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
-      <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다.</p>
+      <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다. Lv.3 화분, Lv.6 액자, Lv.10 샹들리에가 매장에 추가돼요.</p>
       <button class="big-action design" data-action="upgrade-design" data-cost="${designCost}" ${gs.cash < designCost ? 'disabled' : ''}>
         🖼️ 인테리어 업그레이드 (${formatCash(designCost)})
       </button>
