@@ -50,4 +50,8 @@ export interface GameSaveData {
   lastSavedAt: number;
   /** 선택한 전직 id들의 순서 (1차 -> 2차 ...). */
   jobPath: string[];
+  /** 등급별 누적 가챠 횟수 (프레스티지해도 초기화되지 않음, 도감/업적용). */
+  dealerPulls: Record<import('./gacha').DealerGrade, number>;
+  /** 달성한 업적 id 목록. */
+  achievements: string[];
 }

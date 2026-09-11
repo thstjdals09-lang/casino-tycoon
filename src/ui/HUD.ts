@@ -3,6 +3,7 @@ import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
 import { JOBS } from '../game/jobs';
+import { ACHIEVEMENTS } from '../game/achievements';
 
 type Tab = 'table' | 'dealer' | 'venue';
 
@@ -176,6 +177,10 @@ export class HUD {
         })()
       : '';
 
+    const unlockedFlash = gs.lastUnlocked
+      .map((a) => `<div class="gacha-flash achievement-flash">🏆 업적 달성: ${a.name} (수익 x${a.incomeMultiplier})</div>`)
+      .join('');
+
     const rows = gs.dealers
       .map((d) => {
         const upgradeCost = gs.dealerUpgradeCost(d);
@@ -193,13 +198,31 @@ export class HUD {
       })
       .join('');
 
+    const pulls = gs.dealerPulls;
+    const achievementRows = ACHIEVEMENTS.map((a) => {
+      const done = gs.achievements.includes(a.id);
+      return `
+        <div class="row ${done ? 'row-done' : ''}">
+          <div class="row-main">
+            <span class="row-title">${done ? '✅' : '🔒'} ${a.name}</span>
+            <span class="row-sub">${a.description}</span>
+          </div>
+          <span class="row-badge">${done ? `x${a.incomeMultiplier}` : ''}</span>
+        </div>`;
+    }).join('');
+
     return `
       <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
         🎰 딜러 가챠 (${formatCash(nextGachaCost)})
       </button>
       ${flash}
+      ${unlockedFlash}
       <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
-      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2%</p>`;
+      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2%</p>
+
+      <h3 class="section-title">📖 딜러 도감</h3>
+      <p class="tab-caption">누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR}</p>
+      <div class="row-list">${achievementRows}</div>`;
   }
 
   private renderVenueTab(): string {

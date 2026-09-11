@@ -90,13 +90,21 @@ export class MainScene extends Phaser.Scene {
     ensurePixelTexture(this, 'floor-tile', floorTileGrid(), { a: '#7a1220', b: '#5c0e18' }, FLOOR_TILE_PX);
     ensurePixelTexture(this, 'chip-decor', chipStackGrid(), { x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0', r: '#c9a227', g: '#3a0f16' }, 6);
 
-    const humanoid = humanoidGrid();
+    const humanoidBase = humanoidGrid('none');
+    const humanoidHat = humanoidGrid('hat');
+    const humanoidCrown = humanoidGrid('crown');
+    const ACCESSORY_GRID: Record<string, ReturnType<typeof humanoidGrid>> = {
+      N: humanoidBase,
+      R: humanoidBase,
+      SR: humanoidHat,
+      SSR: humanoidCrown,
+    };
     for (const g of ['N', 'R', 'SR', 'SSR'] as const) {
       const color = toHex(gradeConfig(g).color);
-      ensurePixelTexture(this, `dealer-${g}`, humanoid, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
+      ensurePixelTexture(this, `dealer-${g}`, ACCESSORY_GRID[g], { ...HUMANOID_PALETTE_BASE, v: color, c: '#ffd700', a: '#e0455c' }, 5);
     }
     CUSTOMER_SHIRTS.forEach((color, i) => {
-      ensurePixelTexture(this, `customer-${i}`, humanoid, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
+      ensurePixelTexture(this, `customer-${i}`, humanoidBase, { ...HUMANOID_PALETTE_BASE, v: color }, 5);
     });
   }
 
@@ -128,9 +136,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private showRandomSpeechBubble() {
-    const occupiedIds = gameState.tables.map((t) => t.id);
-    if (occupiedIds.length === 0) return;
-    const tableId = Phaser.Utils.Array.GetRandom(occupiedIds);
+    const seatedIds = gameState.tables.filter((t) => t.dealerId !== null).map((t) => t.id);
+    if (seatedIds.length === 0) return;
+    const tableId = Phaser.Utils.Array.GetRandom(seatedIds);
     const pos = this.tablePositions.get(tableId);
     if (!pos) return;
     const line = Phaser.Utils.Array.GetRandom(PLAYER_LINES);
@@ -209,13 +217,19 @@ export class MainScene extends Phaser.Scene {
     const tableImg = this.add.image(x, y + 30, tableTextureKey).setOrigin(0.5, 0.5);
 
     let dealerImg: Phaser.GameObjects.Image | null = null;
+    let sparkle: Phaser.GameObjects.Text | null = null;
     if (dealer) {
       dealerImg = this.add.image(x - 14, y + 6, `dealer-${dealer.grade}`).setOrigin(0.5, 1);
+      if (dealer.grade === 'SSR') {
+        sparkle = this.add.text(x - 4, y - 24, '✨', { fontSize: '14px' }).setOrigin(0.5);
+        this.tweens.add({ targets: sparkle, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
+      }
     }
 
-    // 모든 활성 테이블에는 게임을 하는 손님이 앉아 있다 (딜러 유무와 무관).
-    const customerKey = `customer-${table.id % CUSTOMER_SHIRTS.length}`;
-    const customerImg = this.add.image(x + 16, y + 52, customerKey).setOrigin(0.5, 1).setScale(0.9);
+    // 딜러가 있는(=손님이 착석하는) 테이블에만 손님 스프라이트가 앉는다.
+    const customerImg = dealer
+      ? this.add.image(x + 16, y + 52, `customer-${table.id % CUSTOMER_SHIRTS.length}`).setOrigin(0.5, 1).setScale(0.9)
+      : null;
 
     const levelText = this.add
       .text(x, y - 44, `Lv.${table.level}`, { fontFamily: 'monospace', fontSize: '14px', color: '#fff8ec' })
@@ -233,9 +247,11 @@ export class MainScene extends Phaser.Scene {
           .setOrigin(0.5)
       : null;
 
-    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, customerImg, levelText, incomeText];
+    const items: Phaser.GameObjects.GameObject[] = [panel, tableImg, levelText, incomeText];
+    if (customerImg) items.push(customerImg);
     if (dealerImg) items.push(dealerImg);
     if (gradeText) items.push(gradeText);
+    if (sparkle) items.push(sparkle);
     this.layoutContainer.add(items);
   }
 

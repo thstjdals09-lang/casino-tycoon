@@ -249,6 +249,27 @@ select {
   padding: 4px;
 }
 
+.achievement-flash {
+  color: var(--gold);
+}
+
+.section-title {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.row-done {
+  opacity: 0.9;
+  border-color: var(--gold);
+}
+
+.row-badge {
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: bold;
+}
+
 /* ---- 하단 탭 네비게이션 ---- */
 .bottom-nav {
   flex: 0 0 auto;

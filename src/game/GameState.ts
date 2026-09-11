@@ -3,10 +3,13 @@ import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableL
 import { createNewSave, loadSave, persistSave } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
+import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 3000;
 const TAP_BONUS_SECONDS = 5;
+/** 딜러가 배정돼 손님이 착석하면 붙는 추가 수익 배율. */
+const CUSTOMER_SEATED_BONUS = 1.15;
 
 export interface OfflineEarningsResult {
   elapsedMs: number;
@@ -58,6 +61,24 @@ export class GameState {
     return this.lastGacha;
   }
 
+  get dealerPulls(): DealerPullCounts {
+    return this.data.dealerPulls;
+  }
+
+  get achievements(): readonly string[] {
+    return this.data.achievements;
+  }
+
+  achievementList(): AchievementConfig[] {
+    return ACHIEVEMENTS;
+  }
+
+  private lastUnlockedAchievements: AchievementConfig[] = [];
+
+  get lastUnlocked(): AchievementConfig[] {
+    return this.lastUnlockedAchievements;
+  }
+
   jobMultipliers(): JobMultipliers {
     return computeJobMultipliers(this.data.jobPath);
   }
@@ -83,14 +104,15 @@ export class GameState {
     const dealer = this.dealerFor(table);
     const base = tier.tableBaseIncome * tableLevelMultiplier(tier, table.level);
     const jobs = this.jobMultipliers();
-    // 딜러가 배정된 테이블만 전직의 딜러 효율 보너스를 받는다 (딜러 없음 페널티는 그대로).
-    const dealerMult = dealer !== null ? dealerMultiplier(tier, dealer) * jobs.dealerEff : dealerMultiplier(tier, null);
+    // 딜러가 배정된 테이블만 전직의 딜러 효율 보너스 + 손님 착석 보너스를 받는다.
+    const dealerMult =
+      dealer !== null ? dealerMultiplier(tier, dealer) * jobs.dealerEff * CUSTOMER_SEATED_BONUS : dealerMultiplier(tier, null);
     return base * dealerMult * this.data.prestigeMultiplier;
   }
 
   totalIncomePerSecond(): number {
     const raw = this.data.tables.reduce((sum, t) => sum + this.tableIncomePerSecond(t), 0);
-    return raw * collectionMultiplier(this.data.dealers) * this.jobMultipliers().income;
+    return raw * collectionMultiplier(this.data.dealers) * this.jobMultipliers().income * achievementMultiplier(this.data.achievements);
   }
 
   nextTableCost(): number | null {
@@ -152,6 +174,12 @@ export class GameState {
     const grade = rollGrade(this.jobMultipliers().gacha);
     const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, assignedTableId: null };
     this.data.dealers.push(dealer);
+    this.data.dealerPulls[grade] += 1;
+
+    const newly = checkNewAchievements(this.data.dealerPulls, this.data.achievements);
+    this.lastUnlockedAchievements = newly.map((id) => ACHIEVEMENTS.find((a) => a.id === id)!).filter(Boolean);
+    this.data.achievements.push(...newly);
+
     const result: GachaResult = { dealerId: dealer.id, grade };
     this.lastGacha = result;
     return result;

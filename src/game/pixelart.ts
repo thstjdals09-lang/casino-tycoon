@@ -25,9 +25,10 @@ function rimTransition(width: number, inner: string, rim: string): string {
   return arr.join('');
 }
 
-/** 귀엽고 아기자기한 느낌의 작은 챕터형 캐릭터(딜러/손님 공용 실루엣). 6폭 x 10높이. */
-export function humanoidGrid(): PixelGrid {
-  return [
+/** 귀엽고 아기자기한 느낌의 작은 챕터형 캐릭터(딜러/손님 공용 실루엣). 6폭 x 10높이.
+ * accessory로 등급 높은 딜러일수록 모자/왕관 같은 장식이 위에 덧붙는다(높이가 늘어남, 원점은 바닥 기준이라 레이아웃엔 영향 없음). */
+export function humanoidGrid(accessory: 'none' | 'hat' | 'crown' = 'none'): PixelGrid {
+  const base: PixelGrid = [
     fillRow(6, '.', { 2: 'h', 3: 'h' }),
     fillRow(6, '.', { 1: 'h', 2: 's', 3: 's', 4: 'h' }),
     fillRow(6, '.', { 1: 'h', 2: 's', 3: 's', 4: 'h' }),
@@ -39,6 +40,17 @@ export function humanoidGrid(): PixelGrid {
     fillRow(6, '.', { 1: 'p', 2: 'p', 3: 'p', 4: 'p' }),
     fillRow(6, '.', { 1: 'b', 2: 'b', 4: 'b' }),
   ];
+  if (accessory === 'hat') {
+    return [fillRow(6, '.', { 1: 'c', 2: 'c', 3: 'c', 4: 'c' }), fillRow(6, '.', { 2: 'c', 3: 'c' }), ...base];
+  }
+  if (accessory === 'crown') {
+    return [
+      fillRow(6, '.', { 0: 'c', 2: 'c', 3: 'c', 5: 'c' }),
+      fillRow(6, '.', { 0: 'c', 1: 'c', 2: 'a', 3: 'a', 4: 'c', 5: 'c' }),
+      ...base,
+    ];
+  }
+  return base;
 }
 
 /** 위에서 본 포커 테이블. 나무 테두리 + 펠트 + 칩 3개. width x height 파라미터로 조절 가능. */
