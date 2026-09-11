@@ -5,6 +5,7 @@ import { DEALER_GRADES, gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { customerGradeConfig } from '../game/customers';
+import { resetSave } from '../game/SaveManager';
 
 type Tab = 'table' | 'dealer' | 'venue';
 type OwnedFilter = 'all' | 'owned' | 'unowned';
@@ -106,6 +107,12 @@ export class HUD {
       case 'upgrade-bar':
         changed = this.gameState.upgradeBar();
         break;
+      case 'reset-game':
+        if (window.confirm('정말 초기화할까요? 현금/테이블/딜러/전직/도감이 전부 사라지고 처음부터 다시 시작합니다.')) {
+          resetSave();
+          window.location.reload();
+        }
+        return;
     }
     if (changed) {
       this.gameState.save();
@@ -347,7 +354,9 @@ export class HUD {
             🏗️ 다음 층으로 확장 (${formatCash(advanceCost)}) · 테이블/딜러/인테리어/바 그대로 유지
           </button>`
         }
-      </div>`;
+      </div>
+
+      <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>`;
   }
 
   private render(): void {

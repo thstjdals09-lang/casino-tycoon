@@ -311,6 +311,20 @@ select {
   border-color: #a83350;
 }
 
+.danger-btn {
+  width: 100%;
+  margin-top: 14px;
+  background: transparent;
+  border: 1px solid #6b2a2a;
+  color: #a97070;
+  font-size: 11px;
+}
+
+.danger-btn:hover {
+  background: #2a1012;
+  color: #ff8f8f;
+}
+
 /* ---- 하단 탭 네비게이션 ---- */
 .bottom-nav {
   flex: 0 0 auto;
