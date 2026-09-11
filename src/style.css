@@ -1,13 +1,14 @@
 :root {
   color-scheme: dark;
   font-family: 'Courier New', monospace;
-  --wood: #8b5a2b;
-  --wood-dark: #5c3a1c;
-  --cream: #fff3d6;
-  --gold: #ffcf5c;
-  --mint: #5ecb9a;
-  --pink: #ff8fa3;
-  --panel-bg: #3a2a1c;
+  --wood: #b5892f;
+  --wood-dark: #3a0f16;
+  --cream: #ffe9c7;
+  --gold: #f2c14e;
+  --mint: #38c98f;
+  --pink: #ff6b81;
+  --panel-bg: #250a10;
+  --felt: #0b6e4f;
 }
 
 * {
@@ -18,8 +19,8 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: #1e140d;
-  color: #fff3d6;
+  background: #0e0508;
+  color: #ffe9c7;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
 }
@@ -37,7 +38,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #2a1c12, #16100a);
+  background: radial-gradient(ellipse at 50% 20%, #2a0f10 0%, #12060a 70%);
 }
 
 #game-container canvas {
@@ -48,13 +49,14 @@ body {
 
 /* ---- 하단 HUD: 네비게이션 포함 ---- */
 #hud {
-  flex: 0 0 auto;
-  max-height: 46vh;
+  flex: 0 0 44vh;
+  height: 44vh;
   background: var(--panel-bg);
   border-top: 4px solid var(--wood-dark);
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 
 .stat-bar {
@@ -62,7 +64,7 @@ body {
   align-items: baseline;
   justify-content: space-between;
   padding: 10px 14px 6px;
-  background: linear-gradient(180deg, #4a3320, #3a2a1c);
+  background: linear-gradient(180deg, #4a1420, #2a0d13);
 }
 
 .stat-bar .cash {
@@ -79,6 +81,7 @@ body {
 
 .tab-content {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 14px 4px;
   display: flex;
@@ -96,7 +99,7 @@ body {
 button {
   font-family: inherit;
   font-size: 12px;
-  background: #5a4023;
+  background: #6b1e2b;
   color: #fff3d6;
   border: 2px solid var(--wood-dark);
   border-radius: 8px;
@@ -105,7 +108,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #6b4d2c;
+  background: #8a2a3a;
   border-color: var(--gold);
 }
 
@@ -130,7 +133,7 @@ button:disabled {
 select {
   font-family: inherit;
   font-size: 11px;
-  background: #2a1c12;
+  background: #170609;
   color: #fff3d6;
   border: 1px solid var(--wood-dark);
   border-radius: 6px;
@@ -147,7 +150,7 @@ select {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #2a1c12;
+  background: #170609;
   border: 1px solid var(--wood-dark);
   border-radius: 8px;
   padding: 7px 9px;
@@ -177,7 +180,7 @@ select {
 }
 
 .venue-card {
-  background: #2a1c12;
+  background: #170609;
   border: 1px solid var(--wood-dark);
   border-radius: 10px;
   padding: 12px;
@@ -208,7 +211,7 @@ select {
 
 .advance-progress {
   height: 10px;
-  background: #2a1c12;
+  background: #170609;
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 8px;
@@ -224,7 +227,7 @@ select {
   width: 100%;
   background: linear-gradient(180deg, #ffcf5c, #d69a2f);
   border-color: #8a6d1f;
-  color: #3a2a1c;
+  color: #2a0d13;
   font-weight: bold;
 }
 
@@ -251,7 +254,7 @@ select {
   flex: 0 0 auto;
   display: flex;
   border-top: 2px solid var(--wood-dark);
-  background: #2a1c12;
+  background: #170609;
 }
 
 .nav-btn {
@@ -274,11 +277,11 @@ select {
 
 .nav-btn.active {
   color: var(--gold);
-  background: #3a2a1c;
+  background: #2a0d13;
 }
 
 .nav-btn:hover:not(.active) {
-  background: #33241a;
+  background: #3a1018;
 }
 
 /* ---- 전직 모달 ---- */
@@ -317,14 +320,14 @@ select {
 
 .job-card {
   text-align: left;
-  background: #2a1c12;
+  background: #170609;
   border: 2px solid var(--wood-dark);
   border-radius: 8px;
   padding: 10px 12px;
 }
 
 .job-card:hover {
-  background: #33241a;
+  background: #3a1018;
   border-color: var(--gold);
 }
 

@@ -26,9 +26,29 @@ export class HUD {
     this.render();
   }
 
-  /** 자동 수입으로 오르는 숫자(잔고 등)를 주기적으로 다시 그리기 위한 훅. */
+  /**
+   * 매 틱(250ms)마다 호출되는 가벼운 갱신. 잔고처럼 계속 바뀌는 숫자와
+   * 버튼 활성/비활성만 갱신하고 DOM 구조는 절대 다시 그리지 않는다.
+   * (select 드롭다운이 열려 있는 도중에 innerHTML을 통째로 갈아치우면
+   * 드롭다운이 열리자마자 닫혀버리는 문제가 있었음 — 그래서 분리함.)
+   */
   refresh(): void {
-    this.render();
+    const gs = this.gameState;
+    const cashEl = this.root.querySelector('#hud-cash');
+    if (cashEl) cashEl.textContent = `💰 ${formatCash(gs.cash)}`;
+    const incomeEl = this.root.querySelector('#hud-income');
+    if (incomeEl) incomeEl.textContent = `+${formatCash(gs.totalIncomePerSecond())}/초`;
+
+    this.root.querySelectorAll<HTMLButtonElement>('button[data-cost]').forEach((btn) => {
+      const cost = Number(btn.dataset.cost);
+      btn.disabled = gs.cash < cost;
+    });
+
+    const advanceCost = gs.tier.advanceCost;
+    const bar = this.root.querySelector<HTMLElement>('#advance-bar');
+    if (bar && advanceCost !== null) {
+      bar.style.width = `${Math.min(100, (gs.cash / advanceCost) * 100)}%`;
+    }
   }
 
   private onClick(e: Event) {
@@ -122,14 +142,14 @@ export class HUD {
         return `
           <div class="row">
             <div class="row-main">
-              <span class="row-title">🃏 테이블 #${t.id + 1} · Lv.${t.level}</span>
+              <span class="row-title">♠ 테이블 #${t.id + 1} · Lv.${t.level}</span>
               <span class="row-sub">${formatCash(income)}/초</span>
             </div>
             <select data-action="assign-dealer" data-id="${t.id}">
               <option value="">딜러 없음</option>
               ${dealerOptions}
             </select>
-            <button data-action="upgrade-table" data-id="${t.id}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
+            <button data-action="upgrade-table" data-id="${t.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
               강화 (${formatCash(upgradeCost)})
             </button>
           </div>`;
@@ -137,7 +157,7 @@ export class HUD {
       .join('');
 
     return `
-      <button class="big-action" data-action="buy-table" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
+      <button class="big-action" data-action="buy-table" data-cost="${nextTableCost ?? Infinity}" ${nextTableCost === null || gs.cash < nextTableCost ? 'disabled' : ''}>
         + 테이블 구매${nextTableCost !== null ? ` (${formatCash(nextTableCost)})` : ' (매장 만석)'}
       </button>
       <div class="row-list">${rows}</div>
@@ -166,7 +186,7 @@ export class HUD {
               <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] 딜러 #${d.id + 1} · Lv.${d.level}</span>
               <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중 (보유 효과만 적용)'}</span>
             </div>
-            <button data-action="upgrade-dealer" data-id="${d.id}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
+            <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
               교육 (${formatCash(upgradeCost)})
             </button>
           </div>`;
@@ -174,7 +194,7 @@ export class HUD {
       .join('');
 
     return `
-      <button class="big-action gacha" data-action="pull-dealer" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
+      <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
         🎰 딜러 가챠 (${formatCash(nextGachaCost)})
       </button>
       ${flash}
@@ -207,9 +227,9 @@ export class HUD {
             ? '<p class="final-tier">🏆 국내 최고 카지노에 도달했습니다!</p>'
             : `
           <div class="advance-progress">
-            <div class="advance-progress-bar" style="width:${Math.min(100, (gs.cash / advanceCost) * 100)}%"></div>
+            <div class="advance-progress-bar" id="advance-bar" style="width:${Math.min(100, (gs.cash / advanceCost) * 100)}%"></div>
           </div>
-          <button class="advance-btn" data-action="advance-venue" ${gs.canAdvanceVenue() ? '' : 'disabled'}>
+          <button class="advance-btn" data-action="advance-venue" data-cost="${advanceCost}" ${gs.canAdvanceVenue() ? '' : 'disabled'}>
             🏗️ 매장 확장 (${formatCash(advanceCost)})
           </button>`
         }
@@ -226,21 +246,21 @@ export class HUD {
       ${this.renderJobChoiceModal()}
 
       <div class="stat-bar">
-        <div class="cash">💰 ${formatCash(gs.cash)}</div>
-        <div class="income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
+        <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>
+        <div class="income" id="hud-income">+${formatCash(gs.totalIncomePerSecond())}/초</div>
       </div>
 
       <div class="tab-content">${tabContent}</div>
 
       <nav class="bottom-nav">
         <button class="nav-btn ${this.tab === 'table' ? 'active' : ''}" data-action="set-tab" data-tab="table">
-          <span class="nav-icon">🃏</span><span>테이블</span>
+          <span class="nav-icon">♠</span><span>테이블</span>
         </button>
         <button class="nav-btn ${this.tab === 'dealer' ? 'active' : ''}" data-action="set-tab" data-tab="dealer">
           <span class="nav-icon">🎰</span><span>딜러</span>
         </button>
         <button class="nav-btn ${this.tab === 'venue' ? 'active' : ''}" data-action="set-tab" data-tab="venue">
-          <span class="nav-icon">🏠</span><span>매장</span>
+          <span class="nav-icon">♦</span><span>매장</span>
         </button>
       </nav>
     `;

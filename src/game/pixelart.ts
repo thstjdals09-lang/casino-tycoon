@@ -87,6 +87,22 @@ export function plantGrid(): PixelGrid {
   ];
 }
 
+/** 벽 장식용 포커 칩 스택 (홀덤펍 분위기). 6x10. */
+export function chipStackGrid(): PixelGrid {
+  return [
+    fillRow(6, '.', { 1: 'x', 2: 'x', 3: 'x', 4: 'x' }),
+    fillRow(6, '.', { 1: 'r', 4: 'r' }),
+    fillRow(6, '.', { 1: 'y', 2: 'y', 3: 'y', 4: 'y' }),
+    fillRow(6, '.', { 1: 'r', 4: 'r' }),
+    fillRow(6, '.', { 1: 'z', 2: 'z', 3: 'z', 4: 'z' }),
+    fillRow(6, '.', { 1: 'r', 4: 'r' }),
+    fillRow(6, '.', { 1: 'x', 2: 'x', 3: 'x', 4: 'x' }),
+    fillRow(6, '.', { 1: 'r', 4: 'r' }),
+    fillRow(6, '.', { 0: 'g', 1: 'g', 2: 'g', 3: 'g', 4: 'g', 5: 'g' }),
+    fillRow(6, '.'),
+  ];
+}
+
 export function ensurePixelTexture(
   scene: Phaser.Scene,
   key: string,

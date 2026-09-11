@@ -3,7 +3,7 @@ import { gameState } from '../game/instance';
 import { formatCash } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig } from '../game/gacha';
-import { ensurePixelTexture, floorTileGrid, humanoidGrid, plantGrid, tableGrid } from '../game/pixelart';
+import { ensurePixelTexture, chipStackGrid, floorTileGrid, humanoidGrid, tableGrid } from '../game/pixelart';
 
 const SLOT_W = 170;
 const SLOT_H = 130;
@@ -64,8 +64,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   private buildSharedTextures() {
-    ensurePixelTexture(this, 'floor-tile', floorTileGrid(), { a: '#e8c99b', b: '#d4a76a' }, FLOOR_TILE_PX);
-    ensurePixelTexture(this, 'plant-decor', plantGrid(), { l: '#4caf6b', t: '#2e7d4f', p: '#c56a3b' }, 6);
+    ensurePixelTexture(this, 'floor-tile', floorTileGrid(), { a: '#7a1220', b: '#5c0e18' }, FLOOR_TILE_PX);
+    ensurePixelTexture(this, 'chip-decor', chipStackGrid(), { x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0', r: '#c9a227', g: '#3a0f16' }, 6);
 
     const humanoid = humanoidGrid();
     for (const g of ['N', 'R', 'SR', 'SSR'] as const) {
@@ -77,10 +77,11 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  private ensureTableTexture(tierId: number, themeColor: number): string {
+  private ensureTableTexture(tierId: number): string {
     const key = `table-tier-${tierId}`;
-    const felt = toHex(lighten(themeColor, 60));
-    ensurePixelTexture(this, key, tableGrid(18, 9), { r: '#8b5a2b', f: felt, x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0' }, 5);
+    // 등급이 오를수록 펠트가 살짝 밝아지는 것만 반영하고, 홀덤 테이블다운 초록+금테를 기본으로 유지.
+    const felt = toHex(lighten(0x0b6e4f, tierId * 8));
+    ensurePixelTexture(this, key, tableGrid(18, 9), { r: '#c9a227', f: felt, x: '#e0455c', y: '#f5f5f5', z: '#4f8fe0' }, 5);
     return key;
   }
 
@@ -89,9 +90,9 @@ export class MainScene extends Phaser.Scene {
     const { width } = this.scale;
     const count = Math.max(3, Math.floor(width / 220));
     for (let i = 0; i < count; i++) {
-      const x = 40 + i * (width - 80) / Math.max(1, count - 1);
-      const plant = this.add.image(x, 20, 'plant-decor').setOrigin(0.5, 0);
-      this.decor.add(plant);
+      const x = 40 + (i * (width - 80)) / Math.max(1, count - 1);
+      const chip = this.add.image(x, 18, 'chip-decor').setOrigin(0.5, 0);
+      this.decor.add(chip);
     }
   }
 
@@ -125,7 +126,7 @@ export class MainScene extends Phaser.Scene {
     this.layoutContainer.removeAll(true);
 
     const tables = gameState.tables;
-    const tableTextureKey = this.ensureTableTexture(tier.id, tier.themeColor);
+    const tableTextureKey = this.ensureTableTexture(tier.id);
     const startX = (this.scale.width - Math.min(tier.maxTables, COLS) * SLOT_W) / 2 + SLOT_W / 2;
 
     for (let i = 0; i < tier.maxTables; i++) {
