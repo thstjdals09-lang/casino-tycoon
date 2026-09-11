@@ -1,3 +1,5 @@
+import type { DealerGrade } from './gacha';
+
 export interface TableInstance {
   id: number;
   level: number;
@@ -8,6 +10,7 @@ export interface TableInstance {
 export interface DealerInstance {
   id: number;
   level: number;
+  grade: DealerGrade;
   assignedTableId: number | null;
 }
 
@@ -45,4 +48,6 @@ export interface GameSaveData {
   nextTableId: number;
   nextDealerId: number;
   lastSavedAt: number;
+  /** 선택한 전직 id들의 순서 (1차 -> 2차 ...). */
+  jobPath: string[];
 }

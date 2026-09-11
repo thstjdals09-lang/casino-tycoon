@@ -1,7 +1,7 @@
 import type { GameSaveData } from './types';
 
-const STORAGE_KEY = 'casino-tycoon-save-v1';
-const SAVE_VERSION = 1;
+const STORAGE_KEY = 'casino-tycoon-save-v2';
+const SAVE_VERSION = 2;
 
 export function createNewSave(): GameSaveData {
   return {
@@ -15,6 +15,7 @@ export function createNewSave(): GameSaveData {
     nextTableId: 1,
     nextDealerId: 0,
     lastSavedAt: Date.now(),
+    jobPath: [],
   };
 }
 

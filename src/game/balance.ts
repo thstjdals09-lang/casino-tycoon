@@ -1,4 +1,5 @@
-import type { VenueTierConfig } from './types';
+import type { DealerInstance, VenueTierConfig } from './types';
+import { gradeConfig } from './gacha';
 
 // 매장 등급: 테이블 하나짜리 구석 자리 -> 국내 최고 카지노.
 // 숫자는 1차 스켈레톤 값이며, 플레이 테스트 후 튜닝 예정(디테일 패스).
@@ -112,9 +113,17 @@ export function tableLevelMultiplier(tier: VenueTierConfig, level: number): numb
   return Math.pow(tier.tableLevelIncomeGrowth, level - 1);
 }
 
-export function dealerMultiplier(tier: VenueTierConfig, dealerLevel: number | null): number {
-  if (dealerLevel === null) return tier.noDealerEfficiency;
-  return 1 + dealerLevel * tier.dealerLevelBonus;
+export function dealerMultiplier(tier: VenueTierConfig, dealer: DealerInstance | null): number {
+  if (dealer === null) return tier.noDealerEfficiency;
+  const grade = gradeConfig(dealer.grade);
+  const levelPart = 1 + dealer.level * tier.dealerLevelBonus * grade.levelBonusMultiplier;
+  return levelPart * grade.assignedMultiplier;
+}
+
+/** 보유한 딜러들의 등급만으로 발생하는 전체 수익 배율(1 + 등급별 보너스 합). 배정 여부 무관. */
+export function collectionMultiplier(dealers: readonly DealerInstance[]): number {
+  const bonus = dealers.reduce((sum, d) => sum + gradeConfig(d.grade).passiveMultiplier, 0);
+  return 1 + bonus;
 }
 
 export function formatCash(amount: number): string {

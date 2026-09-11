@@ -219,3 +219,74 @@ section h2 {
     border-top: 2px solid #2b2b36;
   }
 }
+
+/* 전직 모달 */
+.job-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 8, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.job-modal-inner {
+  background: #1a1a22;
+  border: 2px solid #55556a;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+}
+
+.job-modal-inner h2 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  color: #ffd966;
+}
+
+.job-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.job-card {
+  flex: none;
+  text-align: left;
+  background: #24242f;
+  border: 1px solid #40404f;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.job-card:hover {
+  background: #2f2f3d;
+  border-color: #ffd966;
+}
+
+.job-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f0f0f0;
+}
+
+.job-desc {
+  font-size: 11px;
+  color: #9a9aa5;
+  margin-top: 3px;
+}
+
+.job-path {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #ffd966;
+}
+
+.gacha-flash {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: bold;
+}

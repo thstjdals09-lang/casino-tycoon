@@ -1,6 +1,8 @@
 import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig } from './types';
-import { costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
+import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
 import { createNewSave, loadSave, persistSave } from './SaveManager';
+import { rollGrade, type DealerGrade } from './gacha';
+import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 3000;
@@ -11,8 +13,14 @@ export interface OfflineEarningsResult {
   earned: number;
 }
 
+export interface GachaResult {
+  dealerId: number;
+  grade: DealerGrade;
+}
+
 export class GameState {
   private data: GameSaveData;
+  private lastGacha: GachaResult | null = null;
 
   constructor() {
     this.data = loadSave() ?? createNewSave();
@@ -42,6 +50,29 @@ export class GameState {
     return this.data.prestigeMultiplier;
   }
 
+  get jobPath(): readonly string[] {
+    return this.data.jobPath;
+  }
+
+  get lastGachaResult(): GachaResult | null {
+    return this.lastGacha;
+  }
+
+  jobMultipliers(): JobMultipliers {
+    return computeJobMultipliers(this.data.jobPath);
+  }
+
+  pendingJobChoices(): JobConfig[] | null {
+    return pendingJobChoices(this.data.jobPath, this.data.venueTierIndex);
+  }
+
+  chooseJob(jobId: string): boolean {
+    const choices = this.pendingJobChoices();
+    if (!choices || !choices.some((j) => j.id === jobId)) return false;
+    this.data.jobPath.push(jobId);
+    return true;
+  }
+
   dealerFor(table: TableInstance): DealerInstance | null {
     if (table.dealerId === null) return null;
     return this.data.dealers.find((d) => d.id === table.dealerId) ?? null;
@@ -51,12 +82,15 @@ export class GameState {
     const tier = this.tier;
     const dealer = this.dealerFor(table);
     const base = tier.tableBaseIncome * tableLevelMultiplier(tier, table.level);
-    const dealerMult = dealerMultiplier(tier, dealer?.level ?? null);
+    const jobs = this.jobMultipliers();
+    // 딜러가 배정된 테이블만 전직의 딜러 효율 보너스를 받는다 (딜러 없음 페널티는 그대로).
+    const dealerMult = dealer !== null ? dealerMultiplier(tier, dealer) * jobs.dealerEff : dealerMultiplier(tier, null);
     return base * dealerMult * this.data.prestigeMultiplier;
   }
 
   totalIncomePerSecond(): number {
-    return this.data.tables.reduce((sum, t) => sum + this.tableIncomePerSecond(t), 0);
+    const raw = this.data.tables.reduce((sum, t) => sum + this.tableIncomePerSecond(t), 0);
+    return raw * collectionMultiplier(this.data.dealers) * this.jobMultipliers().income;
   }
 
   nextTableCost(): number | null {
@@ -70,7 +104,8 @@ export class GameState {
     return costForNth(tier.tableBaseUpgradeCost, tier.tableUpgradeCostGrowth, table.level - 1);
   }
 
-  nextDealerCost(): number {
+  /** 딜러 가챠 1회 비용. */
+  nextGachaCost(): number {
     const tier = this.tier;
     return costForNth(tier.dealerBaseHireCost, tier.dealerHireCostGrowth, this.data.dealers.length);
   }
@@ -81,6 +116,7 @@ export class GameState {
   }
 
   canAdvanceVenue(): boolean {
+    if (this.pendingJobChoices() !== null) return false; // 전직 선택 전에는 매장 확장 불가
     const cost = this.tier.advanceCost;
     if (cost === null) return false;
     return this.data.cash >= cost;
@@ -108,12 +144,17 @@ export class GameState {
     return true;
   }
 
-  hireDealer(): boolean {
-    const cost = this.nextDealerCost();
-    if (this.data.cash < cost) return false;
+  /** 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직 효과로 고급 등급 확률이 오를 수 있다. */
+  pullDealer(): GachaResult | null {
+    const cost = this.nextGachaCost();
+    if (this.data.cash < cost) return null;
     this.data.cash -= cost;
-    this.data.dealers.push({ id: this.data.nextDealerId++, level: 1, assignedTableId: null });
-    return true;
+    const grade = rollGrade(this.jobMultipliers().gacha);
+    const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, assignedTableId: null };
+    this.data.dealers.push(dealer);
+    const result: GachaResult = { dealerId: dealer.id, grade };
+    this.lastGacha = result;
+    return result;
   }
 
   upgradeDealer(dealerId: number): boolean {
@@ -154,7 +195,7 @@ export class GameState {
     const now = Date.now();
     if (now - table.lastTapAt < TAP_COOLDOWN_MS) return 0;
     table.lastTapAt = now;
-    const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS;
+    const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS * this.jobMultipliers().tap;
     this.data.cash += bonus;
     this.data.totalEarned += bonus;
     return bonus;
@@ -182,7 +223,7 @@ export class GameState {
   consumeOfflineEarnings(): OfflineEarningsResult {
     const elapsedMs = Math.min(Date.now() - this.data.lastSavedAt, MAX_OFFLINE_MS);
     if (elapsedMs < 5000) return { elapsedMs: 0, earned: 0 };
-    const earned = this.totalIncomePerSecond() * (elapsedMs / 1000);
+    const earned = this.totalIncomePerSecond() * (elapsedMs / 1000) * this.jobMultipliers().offline;
     this.data.cash += earned;
     this.data.totalEarned += earned;
     return { elapsedMs, earned };
