@@ -4,6 +4,7 @@ import { emitStateChanged, gameEvents } from '../game/events';
 export class SidePanels {
   private rightRoot: HTMLElement;
   private leftRoot: HTMLElement;
+  private modalRoot: HTMLElement;
   private gameState: GameState;
   private eventModalOpen = false;
   private lastBoostState: 'active' | 'ready' | 'cooldown' = 'ready';
@@ -13,8 +14,15 @@ export class SidePanels {
     this.leftRoot = leftRoot;
     this.gameState = gameState;
 
+    // 모달은 leftRoot(transform: translateY(-50%) 적용된 좁은 박스) 밖, body 바로 아래에 별도로 띄운다.
+    // leftRoot 안에 fixed 모달을 넣으면 transform이 걸린 조상 때문에 화면 전체가 아니라
+    // 그 좁은 박스 기준으로 깨져버린다(=CSS에서 transform이 fixed의 containing block이 되는 현상).
+    this.modalRoot = document.createElement('div');
+    document.body.appendChild(this.modalRoot);
+
     this.rightRoot.addEventListener('click', (e) => this.onClick(e));
     this.leftRoot.addEventListener('click', (e) => this.onClick(e));
+    this.modalRoot.addEventListener('click', (e) => this.onClick(e));
     gameEvents.addEventListener('state-changed', () => this.render());
 
     this.render();
@@ -127,7 +135,7 @@ export class SidePanels {
         🎁
         ${missionReady ? '<span class="side-btn-dot"></span>' : ''}
       </button>
-      ${this.eventModalOpen ? this.renderEventModal() : ''}
     `;
+    this.modalRoot.innerHTML = this.eventModalOpen ? this.renderEventModal() : '';
   }
 }
