@@ -123,10 +123,7 @@ export class HUD {
     // 팝업(job-modal) 바깥의 어두운 배경을 직접 눌렀을 때 닫기. 전직 선택처럼 반드시
     // 응답해야 하는 모달(닫기 버튼이 없음)은 배경 클릭으로 닫히지 않게 자연히 제외됨.
     if (target.classList.contains('job-modal')) {
-      if (this.gachaReveal) {
-        this.gachaReveal = null;
-        this.render();
-      } else if (this.welcomeBack) {
+      if (this.welcomeBack) {
         this.welcomeBack = null;
         this.render();
       } else if (this.settingsOpen) {
@@ -263,7 +260,7 @@ export class HUD {
         }
         break;
       }
-      case 'close-gacha-reveal':
+      case 'clear-gacha-results':
         this.gachaReveal = null;
         this.render();
         return;
@@ -423,6 +420,35 @@ export class HUD {
       <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님 최대 8명이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
   }
 
+  private renderGachaCardsGrid(results: GachaResult[]): string {
+    const cards = results
+      .map((r, i) => {
+        const cfg = gradeConfig(r.grade);
+        const template = templateById(r.templateId);
+        const portrait = dealerPortraitSvg(r.grade, gradeHex(cfg.color));
+        const gradeClass = `grade-${r.grade.toLowerCase()}`;
+        const sparkle = !r.isDuplicate && (r.grade === 'SR' || r.grade === 'SSR') ? '<div class="gacha-card-sparkle">✨</div>' : '';
+        const rays = !r.isDuplicate && r.grade === 'SSR' ? '<div class="gacha-card-rays"></div>' : '';
+        return `
+          <div class="gacha-card ${r.isDuplicate ? '' : gradeClass} ${r.isDuplicate ? 'is-duplicate' : 'is-new'}" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
+            ${rays}
+            ${sparkle}
+            <div class="gacha-card-portrait">${portrait}</div>
+            <div class="gacha-card-name" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name}</div>
+            <div class="gacha-card-tag ${r.isDuplicate ? 'tag-duplicate' : 'tag-new'}">${r.isDuplicate ? '중복' : '✨NEW'}</div>
+          </div>`;
+      })
+      .join('');
+    const newCount = results.filter((r) => !r.isDuplicate).length;
+    const dupeCount = results.length - newCount;
+    return `
+      <div class="gacha-results-header">
+        <p class="tab-caption">신규 ${newCount}명 · 중복 ${dupeCount}개</p>
+        <button class="clear-results-btn" data-action="clear-gacha-results">지우기</button>
+      </div>
+      <div class="gacha-card-grid">${cards}</div>`;
+  }
+
   private renderDealerTab(): string {
     const gs = this.gameState;
     const cost = gs.nextGachaCost();
@@ -451,28 +477,40 @@ export class HUD {
       </button>`;
     };
 
+    const resultsArea =
+      this.gachaReveal && this.gachaReveal.length > 0
+        ? this.renderGachaCardsGrid(this.gachaReveal)
+        : `<p class="empty">뽑기 버튼을 누르면 결과가 여기 바로 보여요.</p>`;
+
     return `
-      <div class="diamond-bar">💎 보유 다이아: <b id="hud-diamonds">${gs.diamonds}</b> · 가챠 1회 💎${cost} (고정가) · 바에서 초당 +${gs.diamondsPerSecond().toFixed(2)}💎</div>
-      ${
-        this.continuousBatchSize !== null
-          ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
-          : ''
-      }
-      <div class="gacha-options-row">
-        <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-skip-gacha-animation" ${gs.skipGachaAnimation ? 'checked' : ''} /> 연출 스킵</label>
-        <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-auto-pull" ${gs.autoPullEnabled ? 'checked' : ''} /> 연속 뽑기(자동)</label>
+      <div class="gacha-top">
+        <div class="diamond-bar">💎 보유 다이아: <b id="hud-diamonds">${gs.diamonds}</b> · 가챠 1회 💎${cost} (고정가) · 바에서 초당 +${gs.diamondsPerSecond().toFixed(2)}💎</div>
+        <div class="gacha-options-row">
+          <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-skip-gacha-animation" ${gs.skipGachaAnimation ? 'checked' : ''} /> 연출 스킵</label>
+          <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-auto-pull" ${gs.autoPullEnabled ? 'checked' : ''} /> 연속 뽑기(자동)</label>
+        </div>
       </div>
-      <div class="gacha-pull-row">
-        ${pullBtn(1, '1회 뽑기')}
-        ${pullBtn(10, '10회 뽑기')}
+      <div class="gacha-results-area">
+        ${flash}
+        ${unlockedFlash}
+        ${resultsArea}
       </div>
-      <div class="gacha-pull-row">
-        ${pullBtn(30, '30회 뽑기')}
-        ${pullBtn(100, '100회 뽑기')}
-      </div>
-      ${flash}
-      ${unlockedFlash}
-      <p class="tab-caption">N 60% · R 28% · SR 10% · SSR 2% · 이미 보유한 딜러가 또 나오면 중복재고로 쌓여요 (딜러 팝업의 "강화"에서 관리)</p>`;
+      <div class="gacha-bottom-actions">
+        ${
+          this.continuousBatchSize !== null
+            ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
+            : ''
+        }
+        <div class="gacha-pull-row">
+          ${pullBtn(1, '1회 뽑기')}
+          ${pullBtn(10, '10회 뽑기')}
+        </div>
+        <div class="gacha-pull-row">
+          ${pullBtn(30, '30회 뽑기')}
+          ${pullBtn(100, '100회 뽑기')}
+        </div>
+        <p class="tab-caption">N 60% · R 28% · SR 10% · SSR 2% · 중복 딜러는 재고로 쌓여요 (딜러 팝업의 "강화"에서 관리)</p>
+      </div>`;
   }
 
   private renderCompendiumTab(): string {
@@ -653,43 +691,6 @@ export class HUD {
       </div>`;
   }
 
-  private renderGachaRevealModal(): string {
-    if (!this.gachaReveal || this.gachaReveal.length === 0) return '';
-    const cards = this.gachaReveal
-      .map((r, i) => {
-        const cfg = gradeConfig(r.grade);
-        const template = templateById(r.templateId);
-        const portrait = dealerPortraitSvg(r.grade, gradeHex(cfg.color));
-        const gradeClass = `grade-${r.grade.toLowerCase()}`;
-        const sparkle = !r.isDuplicate && (r.grade === 'SR' || r.grade === 'SSR') ? '<div class="gacha-card-sparkle">✨</div>' : '';
-        const rays = !r.isDuplicate && r.grade === 'SSR' ? '<div class="gacha-card-rays"></div>' : '';
-        return `
-          <div class="gacha-card ${r.isDuplicate ? '' : gradeClass} ${r.isDuplicate ? 'is-duplicate' : 'is-new'}" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
-            ${rays}
-            ${sparkle}
-            <div class="gacha-card-portrait">${portrait}</div>
-            <div class="gacha-card-name" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name}</div>
-            <div class="gacha-card-tag ${r.isDuplicate ? 'tag-duplicate' : 'tag-new'}">${r.isDuplicate ? '중복' : '✨NEW'}</div>
-          </div>`;
-      })
-      .join('');
-    const newCount = this.gachaReveal.filter((r) => !r.isDuplicate).length;
-    const dupeCount = this.gachaReveal.length - newCount;
-    return `
-      <div class="job-modal">
-        <div class="job-modal-inner gacha-reveal-inner">
-          <h2>🎰 뽑기 결과 (${this.gachaReveal.length}회)</h2>
-          <p class="tab-caption">신규 ${newCount}명 · 중복 ${dupeCount}개</p>
-          ${
-            this.continuousBatchSize !== null
-              ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
-              : ''
-          }
-          <div class="gacha-card-grid">${cards}</div>
-          <button class="close-settings-btn" data-action="close-gacha-reveal">확인</button>
-        </div>
-      </div>`;
-  }
 
   private renderWelcomeModal(): string {
     if (!this.welcomeBack) return '';
@@ -752,8 +753,8 @@ export class HUD {
             <h2>${title}</h2>
             <button class="close-settings-btn big-popup-close" data-action="close-big-popup">✕ 닫기</button>
           </div>
-          ${this.renderBuyMultiplierRow()}
-          <div class="big-popup-body">${content}</div>
+          ${this.bigPopup === 'roster' ? this.renderBuyMultiplierRow() : ''}
+          <div class="big-popup-body ${this.bigPopup === 'gacha' ? 'gacha-mode' : ''}">${content}</div>
         </div>
       </div>`;
   }
@@ -775,7 +776,6 @@ export class HUD {
       ${this.renderWelcomeModal()}
       ${this.renderSettingsModal()}
       ${this.renderBigPopup()}
-      ${this.renderGachaRevealModal()}
 
       <div class="stat-bar">
         <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>

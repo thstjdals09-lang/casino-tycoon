@@ -473,7 +473,6 @@ select {
   padding: 8px 10px;
   font-size: 11px;
   color: #d8b98a;
-  margin-bottom: 4px;
 }
 
 .diamond-bar b {
@@ -484,7 +483,7 @@ select {
 .gacha-options-row {
   display: flex;
   gap: 14px;
-  padding: 0 2px 4px;
+  padding: 0 2px;
 }
 
 .gacha-checkbox {
@@ -945,25 +944,33 @@ select {
   height: 82vh;
   display: flex;
   flex-direction: column;
-  padding: 14px;
+  padding: 12px 14px;
 }
 
 .big-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 6px;
   flex: 0 0 auto;
 }
 
 .big-popup-header h2 {
   margin: 0;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .big-popup-close {
   width: auto;
+  flex: 0 0 auto;
   margin: 0;
-  padding: 6px 12px;
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .big-popup-body {
@@ -973,6 +980,66 @@ select {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 뽑기 팝업 전용: 상단 정보 고정 + 가운데 결과 스크롤 + 하단 버튼 고정 (팝업 자체는 스크롤 안 함). */
+.big-popup-body.gacha-mode {
+  overflow-y: hidden;
+  padding: 0;
+  gap: 0;
+}
+
+.gacha-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+
+.gacha-results-area {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
+  border-top: 1px solid var(--wood-dark);
+  border-bottom: 1px solid var(--wood-dark);
+}
+
+.gacha-results-area .empty {
+  text-align: center;
+  color: #7a6a5a;
+  font-size: 11px;
+  margin-top: 24px;
+}
+
+.gacha-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gacha-results-header .tab-caption {
+  margin: 0;
+}
+
+.clear-results-btn {
+  flex: 0 0 auto;
+  width: auto;
+  font-size: 10px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--wood-dark);
+  color: #a98a63;
+}
+
+.gacha-bottom-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
 }
 
 .big-action.upgrade-all {
