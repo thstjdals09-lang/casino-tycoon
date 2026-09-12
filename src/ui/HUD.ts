@@ -1,6 +1,5 @@
 import { GameState, type DailyLoginResult, type OfflineEarningsResult, type GachaResult } from '../game/GameState';
 import { getCurrentUsername, logout } from '../game/account';
-import { subscribeLeaderboard, type LeaderboardEntry } from '../game/leaderboard';
 import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig, type DealerGrade } from '../game/gacha';
@@ -38,7 +37,6 @@ export class HUD {
   private suppressScrollRestore = false;
   private settingsOpen = false;
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
-  private leaderboard: LeaderboardEntry[] = [];
   private nicknameError = '';
   private gachaReveal: GachaResult[] | null = null;
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
@@ -51,11 +49,6 @@ export class HUD {
     this.root.addEventListener('change', (e) => this.onChange(e));
     this.root.addEventListener('submit', (e) => this.onSubmit(e));
     gameEvents.addEventListener('state-changed', () => this.render());
-
-    subscribeLeaderboard((entries) => {
-      this.leaderboard = entries;
-      this.render();
-    });
 
     this.render();
   }
@@ -189,11 +182,6 @@ export class HUD {
           logout().finally(() => window.location.reload());
         }
         return;
-      case 'claim-mission':
-        if (btn.dataset.mission && btn.dataset.period) {
-          changed = this.gameState.claimMission(btn.dataset.period as 'daily' | 'weekly' | 'monthly', btn.dataset.mission as 'chat' | 'pull' | 'upgrade');
-        }
-        break;
       case 'pull-gacha': {
         const count = Number(btn.dataset.count ?? 1);
         const results = this.gameState.pullDealerMultiple(count);
@@ -503,65 +491,6 @@ export class HUD {
       <div class="row-list">${achievementRows}</div>`;
   }
 
-  private renderMissionPeriod(period: 'daily' | 'weekly' | 'monthly', title: string): string {
-    const gs = this.gameState;
-    const defs: Array<{ type: 'chat' | 'pull' | 'upgrade'; label: string; icon: string }> = [
-      { type: 'chat', label: '채팅 보내기', icon: '💬' },
-      { type: 'pull', label: '딜러 가챠 뽑기', icon: '🎰' },
-      { type: 'upgrade', label: '강화하기(테이블+딜러)', icon: '💪' },
-    ];
-    const rows = defs
-      .map((d) => {
-        const progress = gs.missionProgressFor(period, d.type);
-        const target = gs.missionTarget(period, d.type);
-        const claimed = gs.missionClaimedFor(period, d.type);
-        const reward = gs.missionDiamondReward(period, d.type);
-        const done = progress >= target;
-        const pct = Math.min(100, (progress / target) * 100);
-        return `
-          <div class="row mission-row">
-            <div class="row-main">
-              <span class="row-title">${d.icon} ${d.label} (${Math.min(progress, target)}/${target})</span>
-              <div class="mission-bar"><div class="mission-bar-fill" style="width:${pct}%"></div></div>
-            </div>
-            <button data-action="claim-mission" data-period="${period}" data-mission="${d.type}" ${done && !claimed ? '' : 'disabled'}>
-              ${claimed ? '완료 ✅' : `수령 (💎${reward})`}
-            </button>
-          </div>`;
-      })
-      .join('');
-    return `
-      <h3 class="section-title">${title}</h3>
-      <div class="row-list">${rows}</div>`;
-  }
-
-  private renderMissions(): string {
-    return `
-      ${this.renderMissionPeriod('daily', '📋 오늘의 미션')}
-      ${this.renderMissionPeriod('weekly', '🗓️ 이번 주 미션')}
-      ${this.renderMissionPeriod('monthly', '📅 이번 달 미션')}`;
-  }
-
-  private renderLeaderboard(): string {
-    const me = getCurrentUsername();
-    if (this.leaderboard.length === 0) {
-      return `<h3 class="section-title">🏆 실시간 랭킹 (초당수익)</h3><p class="tab-caption">아직 랭킹 데이터가 없어요.</p>`;
-    }
-    const rows = this.leaderboard
-      .map((e, i) => {
-        const isMe = e.username === me;
-        return `
-          <div class="row ${isMe ? 'row-done' : ''}">
-            <div class="row-main">
-              <span class="row-title">${i + 1}위 · ${e.username}${isMe ? ' (나)' : ''} · ${e.venueTierIndex + 1}층</span>
-              <span class="row-sub">초당 ${formatCash(e.incomePerSecond)} · 누적 ${formatCash(e.totalEarned)}</span>
-            </div>
-          </div>`;
-      })
-      .join('');
-    return `<h3 class="section-title">🏆 실시간 랭킹 (초당수익)</h3><div class="row-list">${rows}</div>`;
-  }
-
   private renderVenueTab(): string {
     const gs = this.gameState;
     const tier = gs.tier;
@@ -583,9 +512,7 @@ export class HUD {
         ${jobPathHtml}
       </div>
 
-      ${this.renderMissions()}
-
-      ${this.renderLeaderboard()}
+      <p class="tab-caption">📋 오늘의 미션과 🏆 실시간 랭킹은 화면 왼쪽 아이콘에서 확인할 수 있어요.</p>
 
       <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
       <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다. Lv.3 화분, Lv.6 액자, Lv.10 샹들리에가 매장에 추가돼요.</p>

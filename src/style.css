@@ -874,6 +874,34 @@ select {
   color: var(--gold);
 }
 
+.event-mission-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #170609;
+  border: 1px solid var(--wood-dark);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.event-mission-line:hover {
+  border-color: var(--gold);
+}
+
+.event-mission-arrow {
+  color: #a98a63;
+  margin-left: 6px;
+}
+
+.mission-modal-inner {
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
 /* ---- 로그인/계정 생성 게이트 ---- */
 #auth-gate {
   position: fixed;
