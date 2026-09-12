@@ -1,6 +1,5 @@
 import { addDoc, collection, limitToLast, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getCurrentUsername } from './account';
 
 export interface ChatMessage {
   username: string;
@@ -10,12 +9,11 @@ export interface ChatMessage {
 
 const COLLECTION = 'chat_messages';
 
-export async function sendChatMessage(text: string): Promise<void> {
-  const username = getCurrentUsername();
+export async function sendChatMessage(displayName: string, text: string): Promise<void> {
   const trimmed = text.trim().slice(0, 200);
-  if (!username || !trimmed) return;
+  if (!displayName || !trimmed) return;
   await addDoc(collection(db, COLLECTION), {
-    username,
+    username: displayName,
     text: trimmed,
     createdAt: serverTimestamp(),
   });

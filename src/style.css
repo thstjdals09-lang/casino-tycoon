@@ -467,6 +467,31 @@ select {
   gap: 8px;
 }
 
+.nickname-section {
+  text-align: left;
+}
+
+.nickname-form {
+  display: flex;
+  gap: 6px;
+}
+
+.nickname-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  background: #170609;
+  color: #fff3d6;
+  border: 1px solid var(--wood-dark);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.nickname-form button {
+  flex: 0 0 auto;
+}
+
 .settings-btn {
   background: transparent;
   border: none;

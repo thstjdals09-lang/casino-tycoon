@@ -1,6 +1,6 @@
 import { collection, doc, onSnapshot, orderBy, query, limit, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getCurrentUid, getCurrentUsername } from './account';
+import { getCurrentUid } from './account';
 
 export interface LeaderboardEntry {
   uid: string;
@@ -14,14 +14,13 @@ export interface LeaderboardEntry {
 const COLLECTION = 'leaderboard';
 
 /** 내 현재 상태를 리더보드 문서에 덮어쓴다(자동저장 주기에 맞춰 호출). */
-export async function pushLeaderboardStats(stats: Omit<LeaderboardEntry, 'uid' | 'username'>): Promise<void> {
+export async function pushLeaderboardStats(displayName: string, stats: Omit<LeaderboardEntry, 'uid' | 'username'>): Promise<void> {
   const uid = getCurrentUid();
-  const username = getCurrentUsername();
-  if (!uid || !username) return;
+  if (!uid || !displayName) return;
   try {
     await setDoc(doc(db, COLLECTION, uid), {
       uid,
-      username,
+      username: displayName,
       ...stats,
       updatedAt: serverTimestamp(),
     });

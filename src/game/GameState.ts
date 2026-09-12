@@ -7,7 +7,7 @@ import { achievementMultiplier, checkNewAchievements, type AchievementConfig, AC
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
 import { rollTemplate, templateById, starLevelFor, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
-import { getCurrentUid } from './account';
+import { getCurrentUid, getCurrentUsername } from './account';
 import { loadCloudSave, saveCloudSave } from './cloudSave';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
@@ -115,6 +115,19 @@ export class GameState {
 
   get missionClaimed() {
     return this.data.missionClaimed;
+  }
+
+  get venueName(): string {
+    return this.data.venueName;
+  }
+
+  /** 닉네임(= 매장 이름) 변경. 2~12자 제한. 성공 시 로컬+클라우드 저장까지 함께 트리거. */
+  setVenueName(name: string): boolean {
+    const trimmed = name.trim().slice(0, 12);
+    if (trimmed.length < 2) return false;
+    this.data.venueName = trimmed;
+    this.save();
+    return true;
   }
 
   missionTarget(type: 'tap' | 'pull' | 'upgrade'): number {
@@ -591,7 +604,7 @@ export class GameState {
     if (cloud && cloud.version === SAVE_VERSION) {
       this.data = cloud;
     } else {
-      this.data = createNewSave();
+      this.data = createNewSave(getCurrentUsername() ?? '이름없는매장');
       await saveCloudSave(uid, this.data);
     }
     persistSave(this.data);

@@ -38,10 +38,10 @@ function startGame() {
     const sidePanels = new SidePanels(sideRightRoot, sideLeftRoot, gameState);
 
     const chatRoot = document.querySelector<HTMLDivElement>('#chat-widget')!;
-    new ChatWidget(chatRoot);
+    new ChatWidget(chatRoot, gameState);
 
     const pushStats = () =>
-      pushLeaderboardStats({
+      pushLeaderboardStats(gameState.venueName, {
         cash: gameState.cash,
         totalEarned: gameState.totalEarned,
         incomePerSecond: gameState.totalIncomePerSecond(),

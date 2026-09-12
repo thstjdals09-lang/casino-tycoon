@@ -1,12 +1,15 @@
 import { sendChatMessage, subscribeChat, type ChatMessage } from '../game/chat';
+import type { GameState } from '../game/GameState';
 
 export class ChatWidget {
   private root: HTMLElement;
+  private gameState: GameState;
   private expanded = false;
   private messages: ChatMessage[] = [];
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, gameState: GameState) {
     this.root = root;
+    this.gameState = gameState;
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('submit', (e) => this.onSubmit(e));
 
@@ -38,7 +41,7 @@ export class ChatWidget {
     const form = e.target as HTMLFormElement;
     const input = form.querySelector<HTMLInputElement>('#chat-input');
     if (!input || !input.value.trim()) return;
-    sendChatMessage(input.value);
+    sendChatMessage(this.gameState.venueName, input.value);
     input.value = '';
   }
 

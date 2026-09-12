@@ -1,10 +1,10 @@
 import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
-const STORAGE_KEY = 'casino-tycoon-save-v9';
-export const SAVE_VERSION = 9;
+const STORAGE_KEY = 'casino-tycoon-save-v10';
+export const SAVE_VERSION = 10;
 
-export function createNewSave(): GameSaveData {
+export function createNewSave(defaultVenueName = ''): GameSaveData {
   return {
     version: SAVE_VERSION,
     venueTierIndex: 0,
@@ -26,6 +26,7 @@ export function createNewSave(): GameSaveData {
     autoUpgradeEnabled: false,
     missionProgress: { tap: 0, pull: 0, upgrade: 0 },
     missionClaimed: { tap: false, pull: false, upgrade: false },
+    venueName: defaultVenueName,
   };
 }
 

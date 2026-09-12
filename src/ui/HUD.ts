@@ -39,6 +39,7 @@ export class HUD {
   private settingsOpen = false;
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
   private leaderboard: LeaderboardEntry[] = [];
+  private nicknameError = '';
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
   constructor(root: HTMLElement, gameState: GameState) {
@@ -47,6 +48,7 @@ export class HUD {
 
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('change', (e) => this.onChange(e));
+    this.root.addEventListener('submit', (e) => this.onSubmit(e));
     gameEvents.addEventListener('state-changed', () => this.render());
 
     subscribeLeaderboard((entries) => {
@@ -183,6 +185,17 @@ export class HUD {
       this.gameState.save();
       emitStateChanged();
     }
+  }
+
+  private onSubmit(e: Event) {
+    const form = e.target as HTMLElement;
+    if (!form.classList.contains('nickname-form')) return;
+    e.preventDefault();
+    const input = (form as HTMLFormElement).querySelector<HTMLInputElement>('#venue-name-input');
+    if (!input) return;
+    const ok = this.gameState.setVenueName(input.value);
+    this.nicknameError = ok ? '' : '매장 이름은 2~12자로 입력해주세요.';
+    this.render();
   }
 
   private onChange(e: Event) {
@@ -564,14 +577,23 @@ export class HUD {
 
   private renderSettingsModal(): string {
     if (!this.settingsOpen) return '';
+    const gs = this.gameState;
     return `
       <div class="job-modal">
         <div class="job-modal-inner">
           <h2>⚙️ 설정</h2>
           <div class="job-cards">
             <div class="account-section">
-              <p class="tab-caption" style="text-align:left">👤 계정: <b>${getCurrentUsername() ?? '(알 수 없음)'}</b></p>
+              <p class="tab-caption" style="text-align:left">👤 로그인: <b>${getCurrentUsername() ?? '(알 수 없음)'}</b></p>
               <button class="chip" data-action="logout">로그아웃</button>
+            </div>
+            <div class="nickname-section">
+              <p class="tab-caption" style="text-align:left">🏷️ 매장 이름(닉네임) — 채팅/랭킹에 표시돼요</p>
+              <form class="nickname-form">
+                <input id="venue-name-input" type="text" value="${gs.venueName}" maxlength="12" placeholder="매장 이름" />
+                <button type="submit">변경</button>
+              </form>
+              ${this.nicknameError ? `<p class="auth-error">${this.nicknameError}</p>` : ''}
             </div>
             <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>
           </div>

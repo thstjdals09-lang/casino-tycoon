@@ -72,4 +72,6 @@ export interface GameSaveData {
   missionProgress: { tap: number; pull: number; upgrade: number };
   /** 오늘 이미 수령한 일일 미션. */
   missionClaimed: { tap: boolean; pull: boolean; upgrade: boolean };
+  /** 채팅/랭킹 등 다른 사람에게 보이는 닉네임 = 매장 이름. */
+  venueName: string;
 }
