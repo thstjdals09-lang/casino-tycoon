@@ -722,6 +722,7 @@ export class HUD {
             <h2>${title}</h2>
             <button class="close-settings-btn big-popup-close" data-action="close-big-popup">✕ 닫기</button>
           </div>
+          ${this.renderBuyMultiplierRow()}
           <div class="big-popup-body">${content}</div>
         </div>
       </div>`;
