@@ -1,4 +1,5 @@
 import { GameState, type DailyLoginResult, type OfflineEarningsResult } from '../game/GameState';
+import { getCurrentUser, logout } from '../game/account';
 import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig, type DealerGrade } from '../game/gacha';
@@ -159,6 +160,12 @@ export class HUD {
       case 'reset-game':
         if (window.confirm('정말 초기화할까요? 현금/테이블/딜러/전직/도감이 전부 사라지고 처음부터 다시 시작합니다.')) {
           this.gameState.resetGame();
+          window.location.reload();
+        }
+        return;
+      case 'logout':
+        if (window.confirm('로그아웃할까요?')) {
+          logout();
           window.location.reload();
         }
         return;
@@ -534,6 +541,10 @@ export class HUD {
         <div class="job-modal-inner">
           <h2>⚙️ 설정</h2>
           <div class="job-cards">
+            <div class="account-section">
+              <p class="tab-caption" style="text-align:left">👤 계정: <b>${getCurrentUser() ?? '(알 수 없음)'}</b></p>
+              <button class="chip" data-action="logout">로그아웃</button>
+            </div>
             <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>
           </div>
           <button class="close-settings-btn" data-action="close-settings">닫기</button>
