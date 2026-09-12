@@ -725,6 +725,21 @@ select {
   color: #a98a63;
 }
 
+.gacha-card.is-duplicate {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+
+.gacha-card-tag.tag-new {
+  color: var(--gold);
+  font-weight: bold;
+  font-size: 9px;
+}
+
+.gacha-card-tag.tag-duplicate {
+  color: #7a6a5a;
+}
+
 .boost-active {
   width: 100%;
   text-align: center;

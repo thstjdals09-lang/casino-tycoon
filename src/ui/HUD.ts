@@ -42,6 +42,7 @@ export class HUD {
   private gachaReveal: GachaResult[] | null = null;
   private continuousBatchSize: number | null = null;
   private bigPopup: 'gacha' | 'roster' | null = null;
+  private dealerSubTab: 'upgrade' | 'achievements' = 'upgrade';
   private continuousAccumulatorMs = 0;
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
@@ -172,6 +173,11 @@ export class HUD {
     }
     if (action === 'close-big-popup') {
       this.bigPopup = null;
+      this.render();
+      return;
+    }
+    if (action === 'set-dealer-subtab' && btn.dataset.subtab) {
+      this.dealerSubTab = btn.dataset.subtab as 'upgrade' | 'achievements';
       this.render();
       return;
     }
@@ -436,32 +442,6 @@ export class HUD {
       .map((a) => `<div class="gacha-flash achievement-flash">🏆 업적 달성: ${a.name} (수익 x${a.incomeMultiplier})</div>`)
       .join('');
 
-    const rows = GRADE_ORDER.flatMap((grade) => gs.dealers.filter((d) => d.grade === grade))
-      .map((d) => {
-        const upgradeCost = gs.dealerUpgradeCost(d);
-        const cfg = gradeConfig(d.grade);
-        const template = templateById(d.templateId);
-        const meta = specialtyMeta(template.specialty);
-        const star = gs.starInfoFor(d.templateId);
-        return `
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name} · Lv.${d.level}</span>
-              <span class="row-sub star-line" style="color:${gradeHex(cfg.color)}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' (만성 ✨)' : ` · 중복재고 ${star.dupeStock}/${star.dupeCost}`}</span>
-              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중'} · ${meta.kind}: ${meta.label} +${(template.specialtyValue * 100).toFixed(0)}%p</span>
-            </div>
-            <div class="row-details">
-              <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
-                교육${this.multLabel()} (${formatCash(upgradeCost)}~)
-              </button>
-              <button data-action="upgrade-stars" data-template="${d.templateId}" ${!star.isMax && star.dupeStock >= star.dupeCost ? '' : 'disabled'}>
-                ⭐ 성급 업 (재고 ${star.dupeCost}개)
-              </button>
-            </div>
-          </div>`;
-      })
-      .join('');
-
     const pullBtn = (count: number, label: string) => {
       const total = cost * count;
       const isLooping = this.continuousBatchSize === count;
@@ -490,34 +470,51 @@ export class HUD {
         ${pullBtn(30, '30회 뽑기')}
         ${pullBtn(100, '100회 뽑기')}
       </div>
-      <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
-        🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
-      </button>
-      <button class="big-action upgrade-all" data-action="upgrade-all-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
-        🔧 전체 딜러 강화${this.multLabel()}
-      </button>
       ${flash}
       ${unlockedFlash}
-      <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
-      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2% · 이미 보유한 딜러가 또 나오면 중복재고로 쌓여요 (같은 딜러 중복 배치 불가, ⭐성급 업으로 소모)</p>`;
+      <p class="tab-caption">N 60% · R 28% · SR 10% · SSR 2% · 이미 보유한 딜러가 또 나오면 중복재고로 쌓여요 (딜러 팝업의 "강화"에서 관리)</p>`;
   }
 
   private renderCompendiumTab(): string {
+    const subTabBtn = (key: 'upgrade' | 'achievements', label: string) =>
+      `<button class="chip ${this.dealerSubTab === key ? 'active' : ''}" data-action="set-dealer-subtab" data-subtab="${key}">${label}</button>`;
+    return `
+      <div class="filter-row dealer-subtab-row">
+        ${subTabBtn('upgrade', '💪 강화')}
+        ${subTabBtn('achievements', '🏆 업적')}
+      </div>
+      ${this.dealerSubTab === 'upgrade' ? this.renderDealerUpgradeSection() : this.renderAchievementsSection()}`;
+  }
+
+  private renderDealerUpgradeSection(): string {
     const gs = this.gameState;
-    const pulls = gs.dealerPulls;
     const ownedTemplateIds = new Set(gs.dealers.map((d) => d.templateId));
 
-    const achievementRows = ACHIEVEMENTS.map((a) => {
-      const done = gs.achievements.includes(a.id);
-      return `
-        <div class="row ${done ? 'row-done' : ''}">
-          <div class="row-main">
-            <span class="row-title">${done ? '✅' : '🔒'} ${a.name}</span>
-            <span class="row-sub">${a.description}</span>
-          </div>
-          <span class="row-badge">${done ? `x${a.incomeMultiplier}` : ''}</span>
-        </div>`;
-    }).join('');
+    const ownedRows = GRADE_ORDER.flatMap((grade) => gs.dealers.filter((d) => d.grade === grade))
+      .map((d) => {
+        const upgradeCost = gs.dealerUpgradeCost(d);
+        const cfg = gradeConfig(d.grade);
+        const template = templateById(d.templateId);
+        const meta = specialtyMeta(template.specialty);
+        const star = gs.starInfoFor(d.templateId);
+        return `
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name} · Lv.${d.level}</span>
+              <span class="row-sub star-line" style="color:${gradeHex(cfg.color)}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' (만성 ✨)' : ` · 중복재고 ${star.dupeStock}/${star.dupeCost}`}</span>
+              <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중'} · ${meta.kind}: ${meta.label} +${(template.specialtyValue * 100).toFixed(0)}%p</span>
+            </div>
+            <div class="row-details">
+              <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
+                교육${this.multLabel()} (${formatCash(upgradeCost)}~)
+              </button>
+              <button data-action="upgrade-stars" data-template="${d.templateId}" ${!star.isMax && star.dupeStock >= star.dupeCost ? '' : 'disabled'}>
+                ⭐ 성급 업 (재고 ${star.dupeCost}개)
+              </button>
+            </div>
+          </div>`;
+      })
+      .join('');
 
     // 이름 붙은 딜러 개별 도감: 보유(해당 템플릿으로 한 번이라도 뽑음)면 컬러, 미보유면 무채색+실루엣.
     const roster = [...DEALER_ROSTER].sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade));
@@ -562,6 +559,15 @@ export class HUD {
       `<button class="chip ${this.gradeFilter === f ? 'active' : ''}" data-action="set-grade-filter" data-filter="${f}">${label}</button>`;
 
     return `
+      <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
+        🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
+      </button>
+      <button class="big-action upgrade-all" data-action="upgrade-all-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
+        🔧 전체 딜러 강화${this.multLabel()}
+      </button>
+      <h3 class="section-title">🧑‍💼 보유 딜러 (${gs.dealers.length})</h3>
+      <div class="row-list">${ownedRows || '<p class="empty">뽑은 딜러가 없습니다. 뽑기 팝업에서 먼저 뽑아보세요!</p>'}</div>
+
       <h3 class="section-title">📖 딜러 도감 (${ownedCount}/${DEALER_ROSTER.length})</h3>
       <div class="filter-row">
         ${ownedFilterBtn('all', '전체')}${ownedFilterBtn('owned', '보유')}${ownedFilterBtn('unowned', '미보유')}
@@ -569,9 +575,26 @@ export class HUD {
       <div class="filter-row">
         ${gradeFilterBtn('all', '등급 전체')}${gradeFilterBtn('N', 'N')}${gradeFilterBtn('R', 'R')}${gradeFilterBtn('SR', 'SR')}${gradeFilterBtn('SSR', 'SSR')}
       </div>
-      <div class="row-list">${dealerCompendium}</div>
+      <div class="row-list">${dealerCompendium}</div>`;
+  }
 
-      <h3 class="section-title">🏆 업적 (누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR})</h3>
+  private renderAchievementsSection(): string {
+    const gs = this.gameState;
+    const pulls = gs.dealerPulls;
+    const achievementRows = ACHIEVEMENTS.map((a) => {
+      const done = gs.achievements.includes(a.id);
+      return `
+        <div class="row ${done ? 'row-done' : ''}">
+          <div class="row-main">
+            <span class="row-title">${done ? '✅' : '🔒'} ${a.name}</span>
+            <span class="row-sub">${a.description}</span>
+          </div>
+          <span class="row-badge">${done ? `x${a.incomeMultiplier}` : ''}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <p class="tab-caption">누적 고용 N ${pulls.N} · R ${pulls.R} · SR ${pulls.SR} · SSR ${pulls.SSR}</p>
       <div class="row-list">${achievementRows}</div>`;
   }
 
@@ -638,15 +661,15 @@ export class HUD {
         const template = templateById(r.templateId);
         const portrait = dealerPortraitSvg(r.grade, gradeHex(cfg.color));
         const gradeClass = `grade-${r.grade.toLowerCase()}`;
-        const sparkle = r.grade === 'SR' || r.grade === 'SSR' ? '<div class="gacha-card-sparkle">✨</div>' : '';
-        const rays = r.grade === 'SSR' ? '<div class="gacha-card-rays"></div>' : '';
+        const sparkle = !r.isDuplicate && (r.grade === 'SR' || r.grade === 'SSR') ? '<div class="gacha-card-sparkle">✨</div>' : '';
+        const rays = !r.isDuplicate && r.grade === 'SSR' ? '<div class="gacha-card-rays"></div>' : '';
         return `
-          <div class="gacha-card ${gradeClass}" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
+          <div class="gacha-card ${r.isDuplicate ? '' : gradeClass} ${r.isDuplicate ? 'is-duplicate' : 'is-new'}" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
             ${rays}
             ${sparkle}
             <div class="gacha-card-portrait">${portrait}</div>
             <div class="gacha-card-name" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name}</div>
-            <div class="gacha-card-tag">${r.isDuplicate ? '중복' : 'NEW'}</div>
+            <div class="gacha-card-tag ${r.isDuplicate ? 'tag-duplicate' : 'tag-new'}">${r.isDuplicate ? '중복' : '✨NEW'}</div>
           </div>`;
       })
       .join('');
@@ -657,6 +680,11 @@ export class HUD {
         <div class="job-modal-inner gacha-reveal-inner">
           <h2>🎰 뽑기 결과 (${this.gachaReveal.length}회)</h2>
           <p class="tab-caption">신규 ${newCount}명 · 중복 ${dupeCount}개</p>
+          ${
+            this.continuousBatchSize !== null
+              ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
+              : ''
+          }
           <div class="gacha-card-grid">${cards}</div>
           <button class="close-settings-btn" data-action="close-gacha-reveal">확인</button>
         </div>
