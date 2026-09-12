@@ -42,6 +42,10 @@ export interface VenueTierConfig {
   floorColor: number;
 }
 
+export type MissionType = 'chat' | 'pull' | 'upgrade';
+export type MissionSet = Record<MissionType, number>;
+export type MissionClaimedSet = Record<MissionType, boolean>;
+
 export interface GameSaveData {
   version: number;
   venueTierIndex: number;
@@ -61,7 +65,7 @@ export interface GameSaveData {
   achievements: string[];
   /** 매장 인테리어(디자인) 업그레이드 레벨. 높을수록 고급 손님 등급 확률 상승. 매장 확장해도 유지됨. */
   designLevel: number;
-  /** 미니바 레벨. 높을수록 더 비싼 음료를 판매해 초당 수익이 오름. 매장 확장해도 유지됨. */
+  /** 미니바 레벨. 높을수록 더 비싼 다이아를 산출함. 매장 확장해도 유지됨. */
   barLevel: number;
   /** 마지막으로 출석 보상을 받은 날짜 (YYYY-MM-DD, 로컬 기준). */
   lastLoginDate: string;
@@ -69,12 +73,28 @@ export interface GameSaveData {
   loginStreak: number;
   /** 자동 업그레이드(테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드) on/off. */
   autoUpgradeEnabled: boolean;
-  /** 오늘(lastLoginDate 기준) 누적한 일일 미션 진행도. */
-  missionProgress: { chat: number; pull: number; upgrade: number };
+  /** 오늘 누적한 일일 미션 진행도. */
+  missionProgress: MissionSet;
   /** 오늘 이미 수령한 일일 미션. */
-  missionClaimed: { chat: boolean; pull: boolean; upgrade: boolean };
+  missionClaimed: MissionClaimedSet;
+  /** 이번 주 누적한 주간 미션 진행도. */
+  weeklyMissionProgress: MissionSet;
+  weeklyMissionClaimed: MissionClaimedSet;
+  /** 마지막으로 주간 미션을 리셋한 주(예: "2026-W37"). */
+  lastWeekKey: string;
+  /** 이번 달 누적한 월간 미션 진행도. */
+  monthlyMissionProgress: MissionSet;
+  monthlyMissionClaimed: MissionClaimedSet;
+  /** 마지막으로 월간 미션을 리셋한 달(예: "2026-09"). */
+  lastMonthKey: string;
   /** 채팅/랭킹 등 다른 사람에게 보이는 닉네임 = 매장 이름. */
   venueName: string;
   /** 이미 보유한 딜러를 또 뽑았을 때 쌓이는 중복 재고. 성급 업그레이드에 소모된다. templateId -> 개수. */
   dupeStock: Record<string, number>;
+  /** 딜러 가챠 전용 프리미엄 재화. 바에서 산출되고, 미션 보상으로도 받는다. */
+  diamonds: number;
+  /** 뽑기 결과 모달의 카드 연출을 생략하고 바로 결과만 반영할지. */
+  skipGachaAnimation: boolean;
+  /** 켜두면 다이아가 있는 동안 자동으로(조용히, 연출 없이) 계속 가챠를 돌림. */
+  autoPullEnabled: boolean;
 }

@@ -1,4 +1,4 @@
-import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig } from './types';
+import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig, MissionType } from './types';
 import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
 import { createNewSave, loadSave, persistSave, resetSave, SAVE_VERSION } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
@@ -11,8 +11,30 @@ import { getCurrentUid, getCurrentUsername } from './account';
 import { loadCloudSave, saveCloudSave } from './cloudSave';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
-const MISSION_TARGETS = { chat: 1, pull: 3, upgrade: 5 } as const;
-const MISSION_REWARD_SECONDS = { chat: 30, pull: 60, upgrade: 45 } as const;
+/** 딜러 가챠 1회 고정 다이아 가격. 더 이상 보유 딜러 수에 따라 오르지 않는다. */
+const GACHA_DIAMOND_COST = 10;
+
+type MissionPeriod = 'daily' | 'weekly' | 'monthly';
+const DAILY_TARGETS: Record<MissionType, number> = { chat: 1, pull: 3, upgrade: 5 };
+const DAILY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 5, pull: 10, upgrade: 8 };
+const WEEKLY_TARGETS: Record<MissionType, number> = { chat: 5, pull: 15, upgrade: 25 };
+const WEEKLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 20, pull: 50, upgrade: 40 };
+const MONTHLY_TARGETS: Record<MissionType, number> = { chat: 15, pull: 50, upgrade: 80 };
+const MONTHLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 80, pull: 200, upgrade: 150 };
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function weekKey(): string {
+  const d = new Date();
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((d.getTime() - jan1.getTime()) / 86_400_000);
+  const week = Math.ceil((dayOfYear + jan1.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${week}`;
+}
+function monthKey(): string {
+  return new Date().toISOString().slice(0, 7);
+}
 
 export interface OfflineEarningsResult {
   elapsedMs: number;
@@ -34,6 +56,7 @@ export interface GachaResult {
 export class GameState {
   private data: GameSaveData;
   private lastGacha: GachaResult | null = null;
+  private lastGachaBatch: GachaResult[] = [];
   private lastUnlockedAchievements: AchievementConfig[] = [];
   private autoSaveDisabled = false;
   // 부스트(황금시간)는 세이브하지 않는 일시적 상태.
@@ -77,6 +100,14 @@ export class GameState {
     return this.lastGacha;
   }
 
+  get lastGachaBatchResult(): GachaResult[] {
+    return this.lastGachaBatch;
+  }
+
+  get diamonds(): number {
+    return Math.floor(this.data.diamonds);
+  }
+
   get dealerPulls(): DealerPullCounts {
     return this.data.dealerPulls;
   }
@@ -109,6 +140,22 @@ export class GameState {
     this.data.autoUpgradeEnabled = !this.data.autoUpgradeEnabled;
   }
 
+  get skipGachaAnimation(): boolean {
+    return this.data.skipGachaAnimation;
+  }
+
+  toggleSkipGachaAnimation(): void {
+    this.data.skipGachaAnimation = !this.data.skipGachaAnimation;
+  }
+
+  get autoPullEnabled(): boolean {
+    return this.data.autoPullEnabled;
+  }
+
+  toggleAutoPull(): void {
+    this.data.autoPullEnabled = !this.data.autoPullEnabled;
+  }
+
   get missionProgress() {
     return this.data.missionProgress;
   }
@@ -130,27 +177,49 @@ export class GameState {
     return true;
   }
 
-  missionTarget(type: 'chat' | 'pull' | 'upgrade'): number {
-    return MISSION_TARGETS[type];
+  missionTarget(period: MissionPeriod, type: MissionType): number {
+    if (period === 'daily') return DAILY_TARGETS[type];
+    if (period === 'weekly') return WEEKLY_TARGETS[type];
+    return MONTHLY_TARGETS[type];
   }
 
-  missionReward(type: 'chat' | 'pull' | 'upgrade'): number {
-    return this.totalIncomePerSecond() * MISSION_REWARD_SECONDS[type];
+  missionDiamondReward(period: MissionPeriod, type: MissionType): number {
+    if (period === 'daily') return DAILY_DIAMOND_REWARD[type];
+    if (period === 'weekly') return WEEKLY_DIAMOND_REWARD[type];
+    return MONTHLY_DIAMOND_REWARD[type];
   }
 
-  claimMission(type: 'chat' | 'pull' | 'upgrade'): boolean {
-    if (this.data.missionClaimed[type]) return false;
-    if (this.data.missionProgress[type] < MISSION_TARGETS[type]) return false;
-    const reward = this.missionReward(type);
-    this.data.cash += reward;
-    this.data.totalEarned += reward;
-    this.data.missionClaimed[type] = true;
+  missionProgressFor(period: MissionPeriod, type: MissionType): number {
+    if (period === 'daily') return this.data.missionProgress[type];
+    if (period === 'weekly') return this.data.weeklyMissionProgress[type];
+    return this.data.monthlyMissionProgress[type];
+  }
+
+  missionClaimedFor(period: MissionPeriod, type: MissionType): boolean {
+    if (period === 'daily') return this.data.missionClaimed[type];
+    if (period === 'weekly') return this.data.weeklyMissionClaimed[type];
+    return this.data.monthlyMissionClaimed[type];
+  }
+
+  claimMission(period: MissionPeriod, type: MissionType): boolean {
+    if (this.missionClaimedFor(period, type)) return false;
+    if (this.missionProgressFor(period, type) < this.missionTarget(period, type)) return false;
+    const claimed = period === 'daily' ? this.data.missionClaimed : period === 'weekly' ? this.data.weeklyMissionClaimed : this.data.monthlyMissionClaimed;
+    claimed[type] = true;
+    this.data.diamonds += this.missionDiamondReward(period, type);
     return true;
   }
 
-  /** 채팅 위젯에서 메시지를 실제로 보냈을 때 호출 — 오늘의 미션 진행도에 반영. */
+  /** chat/pull/upgrade 행동 시 일/주/월간 진행도를 한 번에 반영. */
+  private bumpMissionProgress(type: MissionType): void {
+    this.data.missionProgress[type] += 1;
+    this.data.weeklyMissionProgress[type] += 1;
+    this.data.monthlyMissionProgress[type] += 1;
+  }
+
+  /** 채팅 위젯에서 메시지를 실제로 보냈을 때 호출 — 미션 진행도에 반영. */
   recordChatSent(): void {
-    this.data.missionProgress.chat += 1;
+    this.bumpMissionProgress('chat');
   }
 
   isBoostActive(): boolean {
@@ -181,9 +250,23 @@ export class GameState {
   /**
    * 하루 한 번, 새로운 날짜에 처음 접속했을 때 출석 보상을 지급한다.
    * 이미 오늘 받았으면 null. 날짜는 로컬 기준(YYYY-MM-DD)으로 비교.
+   * 접속할 때마다(하루 한 번이 아니어도) 주간/월간 미션 리셋 여부도 함께 확인한다.
    */
   claimDailyLogin(): DailyLoginResult | null {
-    const today = new Date().toISOString().slice(0, 10);
+    const wk = weekKey();
+    if (this.data.lastWeekKey !== wk) {
+      this.data.lastWeekKey = wk;
+      this.data.weeklyMissionProgress = { chat: 0, pull: 0, upgrade: 0 };
+      this.data.weeklyMissionClaimed = { chat: false, pull: false, upgrade: false };
+    }
+    const mk = monthKey();
+    if (this.data.lastMonthKey !== mk) {
+      this.data.lastMonthKey = mk;
+      this.data.monthlyMissionProgress = { chat: 0, pull: 0, upgrade: 0 };
+      this.data.monthlyMissionClaimed = { chat: false, pull: false, upgrade: false };
+    }
+
+    const today = todayKey();
     if (this.data.lastLoginDate === today) return null;
 
     const isConsecutive = (() => {
@@ -374,9 +457,13 @@ export class GameState {
       achievementMultiplier(this.data.achievements) *
       this.specialtyMultiplier('income') *
       this.maxStarBonusMultiplier();
-    const barIncome = this.barIncomePerSecond() * jobsIncome;
     const boostMult = this.isBoostActive() ? 2 : 1;
-    return (tableIncome + barIncome) * boostMult;
+    return tableIncome * boostMult;
+  }
+
+  /** 바에서 초당 산출되는 다이아 개수 (딜러 가챠 전용 재화). */
+  diamondsPerSecond(): number {
+    return this.barIncomePerSecond();
   }
 
   nextTableCost(): number | null {
@@ -390,10 +477,9 @@ export class GameState {
     return costForNth(tier.tableBaseUpgradeCost, tier.tableUpgradeCostGrowth, table.level - 1);
   }
 
-  /** 딜러 가챠 1회 비용. */
+  /** 딜러 가챠 1회 비용 — 다이아 고정가(더 이상 보유 딜러 수에 따라 오르지 않음). */
   nextGachaCost(): number {
-    const tier = this.tier;
-    return costForNth(tier.dealerBaseHireCost, tier.dealerHireCostGrowth, this.data.dealers.length);
+    return GACHA_DIAMOND_COST;
   }
 
   dealerUpgradeCost(dealer: DealerInstance): number {
@@ -428,7 +514,7 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     table.level += 1;
-    this.data.missionProgress.upgrade += 1;
+    this.bumpMissionProgress('upgrade');
     return true;
   }
 
@@ -441,19 +527,19 @@ export class GameState {
   }
 
   /**
-   * 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다.
-   * 이미 보유한 딜러가 또 나오면 같은 딜러를 여러 테이블에 배치할 수 없도록 새 자리를 만들지
-   * 않고, 중복 재고로 쌓아서 성급 업그레이드에 쓸 수 있게 한다.
+   * 딜러 가챠 실제 로직(연출/lastGacha 갱신은 하지 않음). 등급은 확률로 결정되고,
+   * 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다. 이미 보유한 딜러가 또 나오면
+   * 같은 딜러를 여러 테이블에 배치할 수 없도록 새 자리를 만들지 않고, 중복 재고로 쌓는다.
    */
-  pullDealer(): GachaResult | null {
+  private pullOnce(): GachaResult | null {
     const cost = this.nextGachaCost();
-    if (this.data.cash < cost) return null;
-    this.data.cash -= cost;
+    if (this.diamonds < cost) return null;
+    this.data.diamonds -= cost;
     const gachaRate = this.jobMultipliers().gacha * this.specialtyMultiplier('gacha');
     const grade = rollGrade(gachaRate);
     const template = rollTemplate(grade);
     this.data.dealerPulls[grade] += 1;
-    this.data.missionProgress.pull += 1;
+    this.bumpMissionProgress('pull');
 
     const existing = this.data.dealers.find((d) => d.templateId === template.id);
     let dealerId: number;
@@ -471,9 +557,27 @@ export class GameState {
     this.lastUnlockedAchievements = newly.map((id) => ACHIEVEMENTS.find((a) => a.id === id)!).filter(Boolean);
     this.data.achievements.push(...newly);
 
-    const result: GachaResult = { dealerId, grade, templateId: template.id, isDuplicate };
-    this.lastGacha = result;
+    return { dealerId, grade, templateId: template.id, isDuplicate };
+  }
+
+  /** 수동 가챠 1회. UI 플래시/도감 갱신용으로 lastGachaResult에도 남긴다. */
+  pullDealer(): GachaResult | null {
+    const result = this.pullOnce();
+    if (result) this.lastGacha = result;
     return result;
+  }
+
+  /** count번(또는 다이아가 떨어질 때까지) 연속 가챠. 뽑기 연출용으로 결과 전부를 배열로 반환하고 lastGachaBatchResult에도 저장. */
+  pullDealerMultiple(count: number): GachaResult[] {
+    const results: GachaResult[] = [];
+    for (let i = 0; i < count; i++) {
+      const r = this.pullOnce();
+      if (!r) break;
+      results.push(r);
+    }
+    this.lastGachaBatch = results;
+    if (results.length > 0) this.lastGacha = results[results.length - 1];
+    return results;
   }
 
   upgradeDealer(dealerId: number): boolean {
@@ -483,7 +587,7 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     dealer.level += 1;
-    this.data.missionProgress.upgrade += 1;
+    this.bumpMissionProgress('upgrade');
     return true;
   }
 
@@ -550,7 +654,7 @@ export class GameState {
     return true;
   }
 
-  /** 자동 업그레이드 on일 때 여유 자금으로 테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드를 자동으로 수행. 가챠와 매장 확장은 제외(재미/의사결정 요소라 수동으로 남김). */
+  /** 자동 업그레이드 on일 때 여유 자금으로 테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드를 자동으로 수행. 매장 확장은 재미 요소라 수동으로 남김. */
   private autoManage(): void {
     if (!this.data.autoUpgradeEnabled) return;
 
@@ -576,19 +680,29 @@ export class GameState {
     for (let guard = 0; guard < 50 && this.data.cash >= this.barUpgradeCost(); guard++) this.upgradeBar();
   }
 
-  /** deltaSeconds만큼 수익을 누적하고, 반환값이 true면 자동 업그레이드가 실제로 실행된 틱이라 화면을 다시 그려야 한다. */
+  /** 연속 뽑기 on일 때 다이아가 있는 동안 조용히(연출 없이) 계속 가챠를 돌린다. */
+  private autoPull(): void {
+    if (!this.data.autoPullEnabled) return;
+    for (let guard = 0; guard < 500 && this.diamonds >= this.nextGachaCost(); guard++) {
+      this.pullOnce();
+    }
+  }
+
+  /** deltaSeconds만큼 수익을 누적하고, 반환값이 true면 자동 처리가 실제로 실행된 틱이라 화면을 다시 그려야 한다. */
   tick(deltaSeconds: number): boolean {
     const earned = this.totalIncomePerSecond() * deltaSeconds;
     this.data.cash += earned;
     this.data.totalEarned += earned;
+    this.data.diamonds += this.diamondsPerSecond() * deltaSeconds;
 
     this.autoManageAccumulator += deltaSeconds;
     if (this.autoManageAccumulator >= 1) {
       this.autoManageAccumulator = 0;
-      if (this.data.autoUpgradeEnabled) {
-        this.autoManage();
-        return true;
-      }
+      const didUpgrade = this.data.autoUpgradeEnabled;
+      const didPull = this.data.autoPullEnabled;
+      if (didUpgrade) this.autoManage();
+      if (didPull) this.autoPull();
+      return didUpgrade || didPull;
     }
     return false;
   }
@@ -632,6 +746,10 @@ export class GameState {
         version: SAVE_VERSION,
         missionProgress: { ...defaults.missionProgress, ...(cloud.missionProgress ?? {}) },
         missionClaimed: { ...defaults.missionClaimed, ...(cloud.missionClaimed ?? {}) },
+        weeklyMissionProgress: { ...defaults.weeklyMissionProgress, ...(cloud.weeklyMissionProgress ?? {}) },
+        weeklyMissionClaimed: { ...defaults.weeklyMissionClaimed, ...(cloud.weeklyMissionClaimed ?? {}) },
+        monthlyMissionProgress: { ...defaults.monthlyMissionProgress, ...(cloud.monthlyMissionProgress ?? {}) },
+        monthlyMissionClaimed: { ...defaults.monthlyMissionClaimed, ...(cloud.monthlyMissionClaimed ?? {}) },
         dealerPulls: { ...defaults.dealerPulls, ...(cloud.dealerPulls ?? {}) },
       };
     } else {

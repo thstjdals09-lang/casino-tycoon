@@ -1,8 +1,15 @@
 import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
-const STORAGE_KEY = 'casino-tycoon-save-v12';
-export const SAVE_VERSION = 12;
+const STORAGE_KEY = 'casino-tycoon-save-v14';
+export const SAVE_VERSION = 14;
+
+function emptyMissionSet() {
+  return { chat: 0, pull: 0, upgrade: 0 };
+}
+function emptyMissionClaimedSet() {
+  return { chat: false, pull: false, upgrade: false };
+}
 
 export function createNewSave(defaultVenueName = ''): GameSaveData {
   return {
@@ -24,10 +31,19 @@ export function createNewSave(defaultVenueName = ''): GameSaveData {
     lastLoginDate: '',
     loginStreak: 0,
     autoUpgradeEnabled: false,
-    missionProgress: { chat: 0, pull: 0, upgrade: 0 },
-    missionClaimed: { chat: false, pull: false, upgrade: false },
+    missionProgress: emptyMissionSet(),
+    missionClaimed: emptyMissionClaimedSet(),
+    weeklyMissionProgress: emptyMissionSet(),
+    weeklyMissionClaimed: emptyMissionClaimedSet(),
+    lastWeekKey: '',
+    monthlyMissionProgress: emptyMissionSet(),
+    monthlyMissionClaimed: emptyMissionClaimedSet(),
+    lastMonthKey: '',
     venueName: defaultVenueName,
     dupeStock: {},
+    diamonds: 0,
+    skipGachaAnimation: false,
+    autoPullEnabled: false,
   };
 }
 

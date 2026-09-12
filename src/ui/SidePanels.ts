@@ -83,9 +83,11 @@ export class SidePanels {
     ];
     const missionLines = missionDefs
       .map((d) => {
-        const done = gs.missionClaimed[d.type];
-        const complete = gs.missionProgress[d.type] >= gs.missionTarget(d.type);
-        const status = done ? '✅ 수령완료' : complete ? '🎁 수령 가능!' : `${gs.missionProgress[d.type]}/${gs.missionTarget(d.type)}`;
+        const done = gs.missionClaimedFor('daily', d.type);
+        const progress = gs.missionProgressFor('daily', d.type);
+        const target = gs.missionTarget('daily', d.type);
+        const complete = progress >= target;
+        const status = done ? '✅ 수령완료' : complete ? '🎁 수령 가능!' : `${progress}/${target}`;
         return `<div>${d.label}: <b>${status}</b></div>`;
       })
       .join('');
@@ -128,8 +130,10 @@ export class SidePanels {
       </button>
     `;
 
-    const missionReady = (['chat', 'pull', 'upgrade'] as const).some(
-      (t) => gs.missionProgress[t] >= gs.missionTarget(t) && !gs.missionClaimed[t]
+    const missionReady = (['daily', 'weekly', 'monthly'] as const).some((period) =>
+      (['chat', 'pull', 'upgrade'] as const).some(
+        (t) => gs.missionProgressFor(period, t) >= gs.missionTarget(period, t) && !gs.missionClaimedFor(period, t)
+      )
     );
 
     this.leftRoot.innerHTML = `

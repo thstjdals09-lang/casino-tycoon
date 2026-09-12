@@ -1,4 +1,4 @@
-import { GameState, type DailyLoginResult, type OfflineEarningsResult } from '../game/GameState';
+import { GameState, type DailyLoginResult, type OfflineEarningsResult, type GachaResult } from '../game/GameState';
 import { getCurrentUsername, logout } from '../game/account';
 import { subscribeLeaderboard, type LeaderboardEntry } from '../game/leaderboard';
 import { formatCash, VENUE_TIERS } from '../game/balance';
@@ -40,6 +40,7 @@ export class HUD {
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
   private leaderboard: LeaderboardEntry[] = [];
   private nicknameError = '';
+  private gachaReveal: GachaResult[] | null = null;
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
   constructor(root: HTMLElement, gameState: GameState) {
@@ -69,6 +70,14 @@ export class HUD {
     if (cashEl) cashEl.textContent = `💰 ${formatCash(gs.cash)}`;
     const incomeEl = this.root.querySelector('#hud-income');
     if (incomeEl) incomeEl.textContent = `+${formatCash(gs.totalIncomePerSecond())}/초`;
+
+    const diamondsEl = this.root.querySelector('#hud-diamonds');
+    if (diamondsEl) diamondsEl.textContent = String(gs.diamonds);
+
+    this.root.querySelectorAll<HTMLButtonElement>('button[data-diamond-cost]').forEach((btn) => {
+      const cost = Number(btn.dataset.diamondCost);
+      btn.disabled = gs.diamonds < cost;
+    });
 
     this.root.querySelectorAll<HTMLButtonElement>('button[data-cost]').forEach((btn) => {
       const cost = Number(btn.dataset.cost);
@@ -181,7 +190,30 @@ export class HUD {
         }
         return;
       case 'claim-mission':
-        if (btn.dataset.mission) changed = this.gameState.claimMission(btn.dataset.mission as 'chat' | 'pull' | 'upgrade');
+        if (btn.dataset.mission && btn.dataset.period) {
+          changed = this.gameState.claimMission(btn.dataset.period as 'daily' | 'weekly' | 'monthly', btn.dataset.mission as 'chat' | 'pull' | 'upgrade');
+        }
+        break;
+      case 'pull-gacha': {
+        const count = Number(btn.dataset.count ?? 1);
+        const results = this.gameState.pullDealerMultiple(count);
+        if (results.length > 0) {
+          if (!this.gameState.skipGachaAnimation) this.gachaReveal = results;
+          changed = true;
+        }
+        break;
+      }
+      case 'close-gacha-reveal':
+        this.gachaReveal = null;
+        this.render();
+        return;
+      case 'toggle-skip-gacha-animation':
+        this.gameState.toggleSkipGachaAnimation();
+        changed = true;
+        break;
+      case 'toggle-auto-pull':
+        this.gameState.toggleAutoPull();
+        changed = true;
         break;
     }
     if (changed) {
@@ -325,7 +357,7 @@ export class HUD {
 
   private renderDealerTab(): string {
     const gs = this.gameState;
-    const nextGachaCost = gs.nextGachaCost();
+    const cost = gs.nextGachaCost();
     const last = gs.lastGachaResult;
 
     const flash = last
@@ -367,9 +399,29 @@ export class HUD {
       })
       .join('');
 
+    const pullBtn = (count: number, label: string) => {
+      const total = cost * count;
+      return `<button class="big-action gacha" data-action="pull-gacha" data-count="${count}" data-diamond-cost="${total}" ${gs.diamonds < total ? 'disabled' : ''}>
+        ${label} (💎${total})
+      </button>`;
+    };
+
     return `
-      <button class="big-action gacha" data-action="pull-dealer" data-cost="${nextGachaCost}" ${gs.cash < nextGachaCost ? 'disabled' : ''}>
-        🎰 딜러 가챠 (${formatCash(nextGachaCost)})
+      <div class="diamond-bar">💎 보유 다이아: <b id="hud-diamonds">${gs.diamonds}</b> · 가챠 1회 💎${cost} (고정가) · 바에서 초당 +${gs.diamondsPerSecond().toFixed(2)}💎</div>
+      <div class="gacha-options-row">
+        <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-skip-gacha-animation" ${gs.skipGachaAnimation ? 'checked' : ''} /> 연출 스킵</label>
+        <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-auto-pull" ${gs.autoPullEnabled ? 'checked' : ''} /> 연속 뽑기(자동)</label>
+      </div>
+      <div class="gacha-pull-row">
+        ${pullBtn(1, '1회 뽑기')}
+        ${pullBtn(10, '10회 뽑기')}
+      </div>
+      <div class="gacha-pull-row">
+        ${pullBtn(30, '30회 뽑기')}
+        ${pullBtn(100, '100회 뽑기')}
+      </div>
+      <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
+        🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
       </button>
       ${flash}
       ${unlockedFlash}
@@ -450,7 +502,7 @@ export class HUD {
       <div class="row-list">${achievementRows}</div>`;
   }
 
-  private renderMissions(): string {
+  private renderMissionPeriod(period: 'daily' | 'weekly' | 'monthly', title: string): string {
     const gs = this.gameState;
     const defs: Array<{ type: 'chat' | 'pull' | 'upgrade'; label: string; icon: string }> = [
       { type: 'chat', label: '채팅 보내기', icon: '💬' },
@@ -459,9 +511,10 @@ export class HUD {
     ];
     const rows = defs
       .map((d) => {
-        const progress = gs.missionProgress[d.type];
-        const target = gs.missionTarget(d.type);
-        const claimed = gs.missionClaimed[d.type];
+        const progress = gs.missionProgressFor(period, d.type);
+        const target = gs.missionTarget(period, d.type);
+        const claimed = gs.missionClaimedFor(period, d.type);
+        const reward = gs.missionDiamondReward(period, d.type);
         const done = progress >= target;
         const pct = Math.min(100, (progress / target) * 100);
         return `
@@ -470,15 +523,22 @@ export class HUD {
               <span class="row-title">${d.icon} ${d.label} (${Math.min(progress, target)}/${target})</span>
               <div class="mission-bar"><div class="mission-bar-fill" style="width:${pct}%"></div></div>
             </div>
-            <button data-action="claim-mission" data-mission="${d.type}" ${done && !claimed ? '' : 'disabled'}>
-              ${claimed ? '완료 ✅' : `수령 (+${formatCash(gs.missionReward(d.type))})`}
+            <button data-action="claim-mission" data-period="${period}" data-mission="${d.type}" ${done && !claimed ? '' : 'disabled'}>
+              ${claimed ? '완료 ✅' : `수령 (💎${reward})`}
             </button>
           </div>`;
       })
       .join('');
     return `
-      <h3 class="section-title">📋 오늘의 미션</h3>
+      <h3 class="section-title">${title}</h3>
       <div class="row-list">${rows}</div>`;
+  }
+
+  private renderMissions(): string {
+    return `
+      ${this.renderMissionPeriod('daily', '📋 오늘의 미션')}
+      ${this.renderMissionPeriod('weekly', '🗓️ 이번 주 미션')}
+      ${this.renderMissionPeriod('monthly', '📅 이번 달 미션')}`;
   }
 
   private renderLeaderboard(): string {
@@ -532,8 +592,8 @@ export class HUD {
         🖼️ 인테리어 업그레이드${this.multLabel()} (${formatCash(designCost)}~)
       </button>
 
-      <h3 class="section-title">🍸 미니바 (Lv.${gs.barLevel})</h3>
-      <p class="tab-caption">${gs.barLevel > 0 ? `현재 음료 가격 ${formatCash(gs.drinkPrice())} · 초당 매출 ${formatCash(gs.barIncomePerSecond())}` : '아직 바가 없습니다. 업그레이드하면 바가 생기고 음료 판매를 시작합니다.'}</p>
+      <h3 class="section-title">🍸 미니바 (Lv.${gs.barLevel}) · 💎 다이아 채굴</h3>
+      <p class="tab-caption">${gs.barLevel > 0 ? `바에서 초당 💎${gs.diamondsPerSecond().toFixed(2)} 획득 (딜러 가챠 전용 재화)` : '아직 바가 없습니다. 업그레이드하면 바가 생기고 다이아를 산출하기 시작합니다.'}</p>
       ${gs.barLevel > 0 ? `<p class="tab-caption">🍹 취급 메뉴: ${gs.unlockedDrinks().map((d) => d.name).join(' · ')}</p>` : ''}
       <button class="big-action bar" data-action="upgrade-bar" data-cost="${barCost}" ${gs.cash < barCost ? 'disabled' : ''}>
         🍹 바 업그레이드${this.multLabel()} (${formatCash(barCost)}~)
@@ -555,6 +615,34 @@ export class HUD {
             🏗️ 다음 층으로 확장 (${formatCash(advanceCost)}) · 테이블/딜러/인테리어/바 그대로 유지
           </button>`
         }
+      </div>`;
+  }
+
+  private renderGachaRevealModal(): string {
+    if (!this.gachaReveal || this.gachaReveal.length === 0) return '';
+    const cards = this.gachaReveal
+      .map((r, i) => {
+        const cfg = gradeConfig(r.grade);
+        const template = templateById(r.templateId);
+        const portrait = dealerPortraitSvg(r.grade, gradeHex(cfg.color));
+        return `
+          <div class="gacha-card" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
+            <div class="gacha-card-portrait">${portrait}</div>
+            <div class="gacha-card-name" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name}</div>
+            <div class="gacha-card-tag">${r.isDuplicate ? '중복' : 'NEW'}</div>
+          </div>`;
+      })
+      .join('');
+    const newCount = this.gachaReveal.filter((r) => !r.isDuplicate).length;
+    const dupeCount = this.gachaReveal.length - newCount;
+    return `
+      <div class="job-modal">
+        <div class="job-modal-inner gacha-reveal-inner">
+          <h2>🎰 뽑기 결과 (${this.gachaReveal.length}회)</h2>
+          <p class="tab-caption">신규 ${newCount}명 · 중복 ${dupeCount}개</p>
+          <div class="gacha-card-grid">${cards}</div>
+          <button class="close-settings-btn" data-action="close-gacha-reveal">확인</button>
+        </div>
       </div>`;
   }
 
@@ -628,6 +716,7 @@ export class HUD {
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
       ${this.renderWelcomeModal()}
+      ${this.renderGachaRevealModal()}
       ${this.renderSettingsModal()}
 
       <div class="stat-bar">

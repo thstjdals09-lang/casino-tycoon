@@ -434,6 +434,111 @@ select {
   font-size: 12px;
 }
 
+.diamond-bar {
+  background: #170609;
+  border: 1px solid #4f8fe0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #d8b98a;
+  margin-bottom: 4px;
+}
+
+.diamond-bar b {
+  color: #7ec8ff;
+  font-size: 13px;
+}
+
+.gacha-options-row {
+  display: flex;
+  gap: 14px;
+  padding: 0 2px 4px;
+}
+
+.gacha-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #d8b98a;
+}
+
+.gacha-checkbox input {
+  accent-color: var(--gold);
+  width: 14px;
+  height: 14px;
+}
+
+.gacha-pull-row {
+  display: flex;
+  gap: 6px;
+}
+
+.gacha-pull-row .big-action {
+  flex: 1;
+  font-size: 11px;
+  padding: 9px 4px;
+}
+
+.gacha-reveal-inner {
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.gacha-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.gacha-card {
+  position: relative;
+  background: #170609;
+  border: 2px solid;
+  border-radius: 8px;
+  padding: 6px 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  animation: gacha-card-in 0.35s ease-out forwards;
+}
+
+@keyframes gacha-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.gacha-card-portrait {
+  width: 28px;
+}
+
+.gacha-card-portrait svg {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.gacha-card-name {
+  font-size: 9px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.gacha-card-tag {
+  font-size: 8px;
+  color: #a98a63;
+}
+
 .boost-active {
   width: 100%;
   text-align: center;
