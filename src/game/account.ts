@@ -1,27 +1,20 @@
-// 테스트 목적의 아주 단순한 계정 시스템. 서버가 없는 정적 사이트라
-// 실제 인증이 아니라 이 브라우저 안에서만 유효한 로컬 아이디/비번 게이트다.
-// (평문 저장 — 절대 실제 비밀번호를 재사용하지 말 것.)
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  type User,
+} from 'firebase/auth';
+import { auth } from '../firebase';
 
-const ACCOUNTS_KEY = 'casino-tycoon-accounts';
-const SESSION_KEY = 'casino-tycoon-session';
+// Firebase Auth는 이메일 형식을 요구하므로, 아이디를 내부적으로
+// "아이디@casino-tycoon.local" 형태의 가짜 이메일로 변환해서 사용한다.
+// 화면에는 항상 원래 아이디(닉네임, displayName)만 보여준다.
+const EMAIL_SUFFIX = '@casino-tycoon.local';
 
-type Accounts = Record<string, string>;
-
-function loadAccounts(): Accounts {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS_KEY);
-    return raw ? (JSON.parse(raw) as Accounts) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveAccounts(accounts: Accounts): void {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-}
-
-export function getCurrentUser(): string | null {
-  return localStorage.getItem(SESSION_KEY);
+function toEmail(username: string): string {
+  return `${username.trim().toLowerCase()}${EMAIL_SUFFIX}`;
 }
 
 export interface AuthResult {
@@ -29,28 +22,68 @@ export interface AuthResult {
   error?: string;
 }
 
-export function createAccount(username: string, password: string): AuthResult {
+function mapFirebaseError(code: string): string {
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return '이미 존재하는 아이디예요.';
+    case 'auth/invalid-email':
+      return '아이디에 사용할 수 없는 문자가 있어요.';
+    case 'auth/weak-password':
+      return '비밀번호는 6자 이상이어야 해요.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return '아이디 또는 비밀번호가 일치하지 않아요.';
+    case 'auth/too-many-requests':
+      return '시도가 너무 많아요. 잠시 후 다시 시도해주세요.';
+    default:
+      return '오류가 발생했어요. 잠시 후 다시 시도해주세요.';
+  }
+}
+
+export async function createAccount(username: string, password: string): Promise<AuthResult> {
   const id = username.trim();
   if (id.length < 2) return { ok: false, error: '아이디는 2자 이상 입력해주세요.' };
-  if (password.length < 4) return { ok: false, error: '비밀번호는 4자 이상 입력해주세요.' };
-  const accounts = loadAccounts();
-  if (accounts[id]) return { ok: false, error: '이미 존재하는 아이디예요.' };
-  accounts[id] = password;
-  saveAccounts(accounts);
-  localStorage.setItem(SESSION_KEY, id);
-  return { ok: true };
-}
-
-export function login(username: string, password: string): AuthResult {
-  const id = username.trim();
-  const accounts = loadAccounts();
-  if (!accounts[id] || accounts[id] !== password) {
-    return { ok: false, error: '아이디 또는 비밀번호가 일치하지 않아요.' };
+  if (password.length < 6) return { ok: false, error: '비밀번호는 6자 이상 입력해주세요.' };
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, toEmail(id), password);
+    await updateProfile(cred.user, { displayName: id });
+    return { ok: true };
+  } catch (e) {
+    const code = (e as { code?: string }).code ?? '';
+    return { ok: false, error: mapFirebaseError(code) };
   }
-  localStorage.setItem(SESSION_KEY, id);
-  return { ok: true };
 }
 
-export function logout(): void {
-  localStorage.removeItem(SESSION_KEY);
+export async function login(username: string, password: string): Promise<AuthResult> {
+  const id = username.trim();
+  try {
+    await signInWithEmailAndPassword(auth, toEmail(id), password);
+    return { ok: true };
+  } catch (e) {
+    const code = (e as { code?: string }).code ?? '';
+    return { ok: false, error: mapFirebaseError(code) };
+  }
+}
+
+export async function logout(): Promise<void> {
+  await signOut(auth);
+}
+
+export function getCurrentUsername(): string | null {
+  return auth.currentUser?.displayName ?? null;
+}
+
+export function getCurrentUid(): string | null {
+  return auth.currentUser?.uid ?? null;
+}
+
+/** 앱 시작 시 로그인 상태를 한 번 확인(비동기)하기 위한 헬퍼. */
+export function waitForAuthReady(): Promise<User | null> {
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
 }

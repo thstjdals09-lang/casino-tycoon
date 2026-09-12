@@ -1,5 +1,6 @@
 import { GameState, type DailyLoginResult, type OfflineEarningsResult } from '../game/GameState';
-import { getCurrentUser, logout } from '../game/account';
+import { getCurrentUsername, logout } from '../game/account';
+import { subscribeLeaderboard, type LeaderboardEntry } from '../game/leaderboard';
 import { formatCash, VENUE_TIERS } from '../game/balance';
 import { emitStateChanged, gameEvents } from '../game/events';
 import { gradeConfig, type DealerGrade } from '../game/gacha';
@@ -37,6 +38,7 @@ export class HUD {
   private suppressScrollRestore = false;
   private settingsOpen = false;
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
+  private leaderboard: LeaderboardEntry[] = [];
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
   constructor(root: HTMLElement, gameState: GameState) {
@@ -46,6 +48,11 @@ export class HUD {
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('change', (e) => this.onChange(e));
     gameEvents.addEventListener('state-changed', () => this.render());
+
+    subscribeLeaderboard((entries) => {
+      this.leaderboard = entries;
+      this.render();
+    });
 
     this.render();
   }
@@ -165,8 +172,7 @@ export class HUD {
         return;
       case 'logout':
         if (window.confirm('로그아웃할까요?')) {
-          logout();
-          window.location.reload();
+          logout().finally(() => window.location.reload());
         }
         return;
       case 'claim-mission':
@@ -456,6 +462,26 @@ export class HUD {
       <div class="row-list">${rows}</div>`;
   }
 
+  private renderLeaderboard(): string {
+    const me = getCurrentUsername();
+    if (this.leaderboard.length === 0) {
+      return `<h3 class="section-title">🏆 실시간 랭킹 (초당수익)</h3><p class="tab-caption">아직 랭킹 데이터가 없어요.</p>`;
+    }
+    const rows = this.leaderboard
+      .map((e, i) => {
+        const isMe = e.username === me;
+        return `
+          <div class="row ${isMe ? 'row-done' : ''}">
+            <div class="row-main">
+              <span class="row-title">${i + 1}위 · ${e.username}${isMe ? ' (나)' : ''} · ${e.venueTierIndex + 1}층</span>
+              <span class="row-sub">초당 ${formatCash(e.incomePerSecond)} · 누적 ${formatCash(e.totalEarned)}</span>
+            </div>
+          </div>`;
+      })
+      .join('');
+    return `<h3 class="section-title">🏆 실시간 랭킹 (초당수익)</h3><div class="row-list">${rows}</div>`;
+  }
+
   private renderVenueTab(): string {
     const gs = this.gameState;
     const tier = gs.tier;
@@ -478,6 +504,8 @@ export class HUD {
       </div>
 
       ${this.renderMissions()}
+
+      ${this.renderLeaderboard()}
 
       <h3 class="section-title">🛋️ 인테리어 디자인 (Lv.${gs.designLevel})</h3>
       <p class="tab-caption">디자인이 좋을수록 씀씀이 좋은 손님(단골/큰손/VIP)이 올 확률이 올라갑니다. Lv.3 화분, Lv.6 액자, Lv.10 샹들리에가 매장에 추가돼요.</p>
@@ -542,7 +570,7 @@ export class HUD {
           <h2>⚙️ 설정</h2>
           <div class="job-cards">
             <div class="account-section">
-              <p class="tab-caption" style="text-align:left">👤 계정: <b>${getCurrentUser() ?? '(알 수 없음)'}</b></p>
+              <p class="tab-caption" style="text-align:left">👤 계정: <b>${getCurrentUsername() ?? '(알 수 없음)'}</b></p>
               <button class="chip" data-action="logout">로그아웃</button>
             </div>
             <button class="danger-btn" data-action="reset-game">🗑️ 처음부터 다시 시작 (전체 초기화)</button>

@@ -25,13 +25,15 @@ export class AuthGate {
     }
   }
 
-  private onSubmit(e: Event) {
+  private async onSubmit(e: Event) {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const username = (form.querySelector('#auth-username') as HTMLInputElement).value;
     const password = (form.querySelector('#auth-password') as HTMLInputElement).value;
+    const submitBtn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
 
-    const result = this.mode === 'login' ? login(username, password) : createAccount(username, password);
+    const result = this.mode === 'login' ? await login(username, password) : await createAccount(username, password);
     if (!result.ok) {
       this.error = result.error ?? '오류가 발생했어요.';
       this.render();
@@ -45,7 +47,7 @@ export class AuthGate {
     this.root.innerHTML = `
       <div class="auth-card">
         <h1>🎰 카지노 타이쿤</h1>
-        <p class="auth-sub">테스트용 계정입니다 — 이 브라우저에만 저장돼요.</p>
+        <p class="auth-sub">테스트 서버 계정입니다. 여러 기기에서 같은 아이디로 접속할 수 있어요.</p>
 
         <div class="filter-row auth-mode-row">
           <button type="button" class="chip ${isLogin ? 'active' : ''}" data-action="set-mode" data-mode="login">로그인</button>

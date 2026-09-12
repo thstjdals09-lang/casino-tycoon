@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import './style.css';
 import { gameState } from './game/instance';
-import { getCurrentUser } from './game/account';
+import { waitForAuthReady } from './game/account';
+import { pushLeaderboardStats } from './game/leaderboard';
 import { MainScene } from './scenes/MainScene';
 import { HUD } from './ui/HUD';
 import { SidePanels } from './ui/SidePanels';
 import { AuthGate } from './ui/AuthGate';
+import { ChatWidget } from './ui/ChatWidget';
 
 function startGame() {
   const offline = gameState.consumeOfflineEarnings();
@@ -34,6 +36,19 @@ function startGame() {
   const sideLeftRoot = document.querySelector<HTMLDivElement>('#side-actions-left')!;
   const sidePanels = new SidePanels(sideRightRoot, sideLeftRoot, gameState);
 
+  const chatRoot = document.querySelector<HTMLDivElement>('#chat-widget')!;
+  new ChatWidget(chatRoot);
+
+  const pushStats = () =>
+    pushLeaderboardStats({
+      cash: gameState.cash,
+      totalEarned: gameState.totalEarned,
+      incomePerSecond: gameState.totalIncomePerSecond(),
+      venueTierIndex: gameState.tier.id,
+    });
+  pushStats();
+  setInterval(pushStats, 15_000);
+
   setInterval(() => {
     hud.refresh();
     sidePanels.refresh();
@@ -44,15 +59,18 @@ function startGame() {
 
 const authRoot = document.querySelector<HTMLDivElement>('#auth-gate')!;
 const appRoot = document.querySelector<HTMLDivElement>('#app')!;
+appRoot.style.display = 'none';
 
-if (getCurrentUser()) {
-  authRoot.remove();
-  startGame();
-} else {
-  appRoot.style.display = 'none';
-  new AuthGate(authRoot, () => {
+waitForAuthReady().then((user) => {
+  if (user) {
     authRoot.remove();
     appRoot.style.display = '';
     startGame();
-  });
-}
+  } else {
+    new AuthGate(authRoot, () => {
+      authRoot.remove();
+      appRoot.style.display = '';
+      startGame();
+    });
+  }
+});
