@@ -1,6 +1,6 @@
 /** 디자인(인테리어) 업그레이드 1회 비용. 후반으로 갈수록 가팔라지도록 레벨이 오를수록 성장률 자체도 조금씩 커진다. */
 export function designUpgradeCost(currentLevel: number): number {
-  const growth = 1.6 + currentLevel * 0.01;
+  const growth = 1.7 + currentLevel * 0.014;
   return Math.round(300 * Math.pow(growth, currentLevel));
 }
 
@@ -11,7 +11,7 @@ export function designBonusFor(level: number): number {
 
 /** 미니바 업그레이드 1회 비용. 후반으로 갈수록 가팔라짐. */
 export function barUpgradeCost(currentLevel: number): number {
-  const growth = 1.75 + currentLevel * 0.012;
+  const growth = 1.85 + currentLevel * 0.016;
   return Math.round(500 * Math.pow(growth, currentLevel));
 }
 

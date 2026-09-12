@@ -17,10 +17,10 @@ const GACHA_DIAMOND_COST = 50;
 type MissionPeriod = 'daily' | 'weekly' | 'monthly';
 const DAILY_TARGETS: Record<MissionType, number> = { chat: 1, pull: 3, upgrade: 5 };
 const DAILY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 5, pull: 10, upgrade: 8 };
-const WEEKLY_TARGETS: Record<MissionType, number> = { chat: 5, pull: 15, upgrade: 25 };
-const WEEKLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 20, pull: 50, upgrade: 40 };
-const MONTHLY_TARGETS: Record<MissionType, number> = { chat: 15, pull: 50, upgrade: 80 };
-const MONTHLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 80, pull: 200, upgrade: 150 };
+const WEEKLY_TARGETS: Record<MissionType, number> = { chat: 20, pull: 60, upgrade: 150 };
+const WEEKLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 35, pull: 90, upgrade: 70 };
+const MONTHLY_TARGETS: Record<MissionType, number> = { chat: 60, pull: 250, upgrade: 600 };
+const MONTHLY_DIAMOND_REWARD: Record<MissionType, number> = { chat: 150, pull: 400, upgrade: 300 };
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -515,15 +515,17 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     table.level += 1;
-    this.bumpMissionProgress('upgrade');
     return true;
   }
 
-  /** times번(또는 'max'로 살 수 있는 만큼) 연속 강화. 실제로 산 횟수를 반환. */
+  /** times번(또는 'max'로 살 수 있는 만큼) 연속 강화. 실제로 산 횟수를 반환.
+   * 미션 진행도는 (몇 단계를 올렸든) 이 호출 1번당 1회만 반영한다 — 대량구매로
+   * 순식간에 미션을 끝내버리는 걸 막기 위해 "강화 버튼을 누른 횟수"로 카운트. */
   upgradeTableTimes(tableId: number, times: number | 'max'): number {
     let count = 0;
     const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
     while (count < max && this.upgradeTable(tableId)) count++;
+    if (count > 0) this.bumpMissionProgress('upgrade');
     return count;
   }
 
@@ -588,15 +590,15 @@ export class GameState {
     if (this.data.cash < cost) return false;
     this.data.cash -= cost;
     dealer.level += 1;
-    this.bumpMissionProgress('upgrade');
     return true;
   }
 
-  /** times번(또는 'max') 연속 딜러 강화. */
+  /** times번(또는 'max') 연속 딜러 강화. 미션 진행도는 호출 1번당 1회만 반영. */
   upgradeDealerTimes(dealerId: number, times: number | 'max'): number {
     let count = 0;
     const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
     while (count < max && this.upgradeDealer(dealerId)) count++;
+    if (count > 0) this.bumpMissionProgress('upgrade');
     return count;
   }
 
