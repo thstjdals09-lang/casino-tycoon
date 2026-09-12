@@ -19,7 +19,7 @@ function startGame() {
       type: Phaser.AUTO,
       parent: 'game-container',
       width: 800,
-      height: 480,
+      height: 1000,
       backgroundColor: '#12060a',
       pixelArt: true,
       scale: {

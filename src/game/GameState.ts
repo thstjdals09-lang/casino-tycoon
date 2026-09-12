@@ -587,17 +587,29 @@ export class GameState {
    * (Phaser/HUD 초기화 이전에) 반드시 한 번 호출해서 "계정 = 진행상황"이 되게 한다.
    * 이 계정의 클라우드 세이브가 아직 없으면(신규 계정), 이 브라우저에 다른 계정이
    * 남겨뒀을 수도 있는 로컬 데이터를 물려받지 않도록 새 세이브로 시작해서 올려둔다.
+   *
+   * 버전이 달라도(개발 중 세이브 구조가 바뀌어도) 통째로 밀어버리지 않고, 기본값 위에
+   * 클라우드 데이터를 덮어씌우는 방식으로 병합한다 — 그래야 세이브 포맷을 자주 바꿔도
+   * 매번 진행상황이 초기화되지 않는다.
    */
   async hydrateFromCloud(): Promise<void> {
     const uid = getCurrentUid();
     if (!uid) return;
+    const defaults = createNewSave(getCurrentUsername() ?? '이름없는매장');
     const cloud = await loadCloudSave(uid);
-    if (cloud && cloud.version === SAVE_VERSION) {
-      this.data = cloud;
+    if (cloud) {
+      this.data = {
+        ...defaults,
+        ...cloud,
+        version: SAVE_VERSION,
+        missionProgress: { ...defaults.missionProgress, ...(cloud.missionProgress ?? {}) },
+        missionClaimed: { ...defaults.missionClaimed, ...(cloud.missionClaimed ?? {}) },
+        dealerPulls: { ...defaults.dealerPulls, ...(cloud.dealerPulls ?? {}) },
+      };
     } else {
-      this.data = createNewSave(getCurrentUsername() ?? '이름없는매장');
-      await saveCloudSave(uid, this.data);
+      this.data = defaults;
     }
+    await saveCloudSave(uid, this.data);
     persistSave(this.data);
   }
 
