@@ -35,6 +35,7 @@ export class HUD {
   private ownedFilter: OwnedFilter = 'all';
   private gradeFilter: GradeFilter = 'all';
   private suppressScrollRestore = false;
+  private suppressPopupScrollRestore = false;
   private settingsOpen = false;
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
   private nicknameError = '';
@@ -165,6 +166,7 @@ export class HUD {
     }
     if (action === 'open-big-popup' && btn.dataset.popup) {
       this.bigPopup = btn.dataset.popup as 'gacha' | 'roster';
+      this.suppressPopupScrollRestore = true;
       this.render();
       return;
     }
@@ -471,6 +473,11 @@ export class HUD {
 
     return `
       <div class="diamond-bar">💎 보유 다이아: <b id="hud-diamonds">${gs.diamonds}</b> · 가챠 1회 💎${cost} (고정가) · 바에서 초당 +${gs.diamondsPerSecond().toFixed(2)}💎</div>
+      ${
+        this.continuousBatchSize !== null
+          ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
+          : ''
+      }
       <div class="gacha-options-row">
         <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-skip-gacha-animation" ${gs.skipGachaAnimation ? 'checked' : ''} /> 연출 스킵</label>
         <label class="gacha-checkbox"><input type="checkbox" data-action="toggle-auto-pull" ${gs.autoPullEnabled ? 'checked' : ''} /> 연속 뽑기(자동)</label>
@@ -483,11 +490,6 @@ export class HUD {
         ${pullBtn(30, '30회 뽑기')}
         ${pullBtn(100, '100회 뽑기')}
       </div>
-      ${
-        this.continuousBatchSize !== null
-          ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
-          : ''
-      }
       <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
         🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
       </button>
@@ -734,9 +736,11 @@ export class HUD {
     const tabContent = this.tab === 'table' ? this.renderTableTab() : this.renderVenueTab();
 
     // 전체 다시 그리기 전에 스크롤 위치를 저장해뒀다가 그대로 복원 (강화 버튼 눌렀을 때 목록이 맨 위로 튀는 문제 방지).
-    // 단, 탭을 새로 전환한 경우엔 새 탭이니 위에서부터 보여준다.
+    // 단, 탭을 새로 전환한 경우엔 새 탭이니 위에서부터 보여준다. 뽑기/딜러 큰 팝업 안의 스크롤도 마찬가지로 보존.
     const prevScroll = this.suppressScrollRestore ? 0 : this.root.querySelector('.tab-content')?.scrollTop ?? 0;
+    const prevPopupScroll = this.suppressPopupScrollRestore ? 0 : this.root.querySelector('.big-popup-body')?.scrollTop ?? 0;
     this.suppressScrollRestore = false;
+    this.suppressPopupScrollRestore = false;
 
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
@@ -773,5 +777,7 @@ export class HUD {
 
     const newTabContent = this.root.querySelector('.tab-content');
     if (newTabContent) newTabContent.scrollTop = prevScroll;
+    const newPopupBody = this.root.querySelector('.big-popup-body');
+    if (newPopupBody) newPopupBody.scrollTop = prevPopupScroll;
   }
 }
