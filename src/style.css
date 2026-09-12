@@ -330,6 +330,38 @@ select {
   padding: 4px;
 }
 
+.gacha-flash.flash-sr {
+  font-size: 13px;
+  animation: flash-pulse-sr 0.8s ease-in-out 2;
+}
+
+.gacha-flash.flash-ssr {
+  font-size: 15px;
+  animation: flash-pulse-ssr 0.6s ease-in-out 3;
+}
+
+@keyframes flash-pulse-sr {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes flash-pulse-ssr {
+  0%,
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 4px rgba(255, 217, 102, 0.6);
+  }
+  50% {
+    transform: scale(1.15);
+    text-shadow: 0 0 14px rgba(255, 217, 102, 1);
+  }
+}
+
 .achievement-flash {
   color: var(--gold);
 }
@@ -504,6 +536,7 @@ select {
   align-items: center;
   gap: 2px;
   opacity: 0;
+  overflow: hidden;
   animation: gacha-card-in 0.35s ease-out forwards;
 }
 
@@ -516,6 +549,137 @@ select {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* 등급이 높을수록 리빌 연출이 화려해진다: R은 살짝 튕기며 등장, SR은 더 크게 튕기고
+   테두리가 은은히 빛나며, SSR은 배경 플래시 + 빛줄기 + 지속적인 골드 광채까지 붙는다. */
+.gacha-card.grade-r {
+  animation: gacha-card-in-r 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes gacha-card-in-r {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(14px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.gacha-card.grade-sr {
+  animation: gacha-card-in-sr 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, gacha-card-glow-sr 1.6s ease-in-out infinite;
+}
+
+@keyframes gacha-card-in-sr {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15) rotate(3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes gacha-card-glow-sr {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(194, 100, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(194, 100, 255, 0.9);
+  }
+}
+
+.gacha-card.grade-ssr {
+  background: linear-gradient(160deg, #2a1608, #170609 60%);
+  animation: gacha-card-in-ssr 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, gacha-card-glow-ssr 1.2s ease-in-out infinite;
+}
+
+@keyframes gacha-card-in-ssr {
+  0% {
+    opacity: 0;
+    transform: scale(0.1) rotate(-20deg);
+    filter: brightness(3);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.3) rotate(6deg);
+    filter: brightness(2);
+  }
+  80% {
+    transform: scale(0.92) rotate(-2deg);
+    filter: brightness(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+}
+
+@keyframes gacha-card-glow-ssr {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(255, 217, 102, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(255, 217, 102, 1);
+  }
+}
+
+.gacha-card-rays {
+  position: absolute;
+  inset: -40%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 217, 102, 0.35) 0deg 4deg, transparent 4deg 20deg);
+  animation: gacha-rays-spin 3s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+@keyframes gacha-rays-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gacha-card-sparkle {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 11px;
+  z-index: 2;
+  animation: gacha-sparkle-twinkle 0.9s ease-in-out infinite;
+}
+
+@keyframes gacha-sparkle-twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.gacha-card > *:not(.gacha-card-rays) {
+  position: relative;
+  z-index: 1;
 }
 
 .gacha-card-portrait {

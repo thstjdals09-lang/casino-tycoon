@@ -365,7 +365,8 @@ export class HUD {
           const cfg = gradeConfig(last.grade);
           const name = templateById(last.templateId).name;
           const msg = last.isDuplicate ? `${name} 중복! 중복재고 +1 (성급 업그레이드에 사용)` : `${name} 신규 획득!`;
-          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] ${msg}</div>`;
+          const gradeClass = `flash-${last.grade.toLowerCase()}`;
+          return `<div class="gacha-flash ${gradeClass}" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] ${msg}</div>`;
         })()
       : '';
 
@@ -625,8 +626,13 @@ export class HUD {
         const cfg = gradeConfig(r.grade);
         const template = templateById(r.templateId);
         const portrait = dealerPortraitSvg(r.grade, gradeHex(cfg.color));
+        const gradeClass = `grade-${r.grade.toLowerCase()}`;
+        const sparkle = r.grade === 'SR' || r.grade === 'SSR' ? '<div class="gacha-card-sparkle">✨</div>' : '';
+        const rays = r.grade === 'SSR' ? '<div class="gacha-card-rays"></div>' : '';
         return `
-          <div class="gacha-card" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
+          <div class="gacha-card ${gradeClass}" style="border-color:${gradeHex(cfg.color)}; animation-delay:${i * 60}ms">
+            ${rays}
+            ${sparkle}
             <div class="gacha-card-portrait">${portrait}</div>
             <div class="gacha-card-name" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name}</div>
             <div class="gacha-card-tag">${r.isDuplicate ? '중복' : 'NEW'}</div>
