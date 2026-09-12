@@ -8,7 +8,8 @@ export interface JobConfig {
   requiresParent: string | null;
   incomeMultiplier?: number;
   dealerEffMultiplier?: number;
-  tapBonusMultiplier?: number;
+  /** 매장 디자인 보너스(손님 등급 확률) 배율. */
+  designMultiplier?: number;
   offlineMultiplier?: number;
   /** 가챠 SR/SSR 확률 가중치 배율. */
   gachaRateMultiplier?: number;
@@ -36,11 +37,11 @@ export const JOBS: JobConfig[] = [
   {
     id: 'house-master',
     name: '하우스 마스터',
-    description: '딜러 효율 추가 +30%, 손님 응대로 탭 보너스 +20%.',
+    description: '딜러 효율 추가 +30%, 인테리어 감각으로 디자인 보너스 +20%.',
     requiresVenueTier: 2,
     requiresParent: 'dealer-vet',
     dealerEffMultiplier: 1.3,
-    tapBonusMultiplier: 1.2,
+    designMultiplier: 1.2,
   },
   {
     id: 'headhunter',
@@ -61,10 +62,10 @@ export const JOBS: JobConfig[] = [
   {
     id: 'vip-manager',
     name: 'VIP 매니저',
-    description: 'VIP 응대로 탭 보너스 +50%, 오프라인 수익 +30%.',
+    description: 'VIP 응대 노하우로 디자인 보너스 +50%, 오프라인 수익 +30%.',
     requiresVenueTier: 2,
     requiresParent: 'biz-owner',
-    tapBonusMultiplier: 1.5,
+    designMultiplier: 1.5,
     offlineMultiplier: 1.3,
   },
 ];
@@ -72,19 +73,19 @@ export const JOBS: JobConfig[] = [
 export interface JobMultipliers {
   income: number;
   dealerEff: number;
-  tap: number;
+  design: number;
   offline: number;
   gacha: number;
 }
 
 export function computeJobMultipliers(jobPath: readonly string[]): JobMultipliers {
-  const result: JobMultipliers = { income: 1, dealerEff: 1, tap: 1, offline: 1, gacha: 1 };
+  const result: JobMultipliers = { income: 1, dealerEff: 1, design: 1, offline: 1, gacha: 1 };
   for (const id of jobPath) {
     const job = JOBS.find((j) => j.id === id);
     if (!job) continue;
     result.income *= job.incomeMultiplier ?? 1;
     result.dealerEff *= job.dealerEffMultiplier ?? 1;
-    result.tap *= job.tapBonusMultiplier ?? 1;
+    result.design *= job.designMultiplier ?? 1;
     result.offline *= job.offlineMultiplier ?? 1;
     result.gacha *= job.gachaRateMultiplier ?? 1;
   }

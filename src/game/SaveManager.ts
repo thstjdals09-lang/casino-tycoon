@@ -1,8 +1,8 @@
 import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
-const STORAGE_KEY = 'casino-tycoon-save-v10';
-export const SAVE_VERSION = 10;
+const STORAGE_KEY = 'casino-tycoon-save-v11';
+export const SAVE_VERSION = 11;
 
 export function createNewSave(defaultVenueName = ''): GameSaveData {
   return {
@@ -11,7 +11,7 @@ export function createNewSave(defaultVenueName = ''): GameSaveData {
     cash: 0,
     totalEarned: 0,
     prestigeMultiplier: 1,
-    tables: [{ id: 0, level: 1, dealerId: null, lastTapAt: 0, customerGrades: [] }],
+    tables: [{ id: 0, level: 1, dealerId: null, customerGrades: [] }],
     dealers: [],
     nextTableId: 1,
     nextDealerId: 0,
@@ -24,8 +24,8 @@ export function createNewSave(defaultVenueName = ''): GameSaveData {
     lastLoginDate: '',
     loginStreak: 0,
     autoUpgradeEnabled: false,
-    missionProgress: { tap: 0, pull: 0, upgrade: 0 },
-    missionClaimed: { tap: false, pull: false, upgrade: false },
+    missionProgress: { chat: 0, pull: 0, upgrade: 0 },
+    missionClaimed: { chat: false, pull: false, upgrade: false },
     venueName: defaultVenueName,
   };
 }

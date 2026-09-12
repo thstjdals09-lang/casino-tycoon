@@ -5,7 +5,6 @@ export interface TableInstance {
   id: number;
   level: number;
   dealerId: number | null;
-  lastTapAt: number;
   /** 딜러가 배정될 때 함께 착석하는 손님들의 등급(최대 8명, 홀덤 8인 테이블 컨셉). 딜러 없으면 빈 배열. */
   customerGrades: CustomerGrade[];
 }
@@ -69,9 +68,9 @@ export interface GameSaveData {
   /** 자동 업그레이드(테이블 구매/강화, 딜러 강화, 인테리어/바 업그레이드) on/off. */
   autoUpgradeEnabled: boolean;
   /** 오늘(lastLoginDate 기준) 누적한 일일 미션 진행도. */
-  missionProgress: { tap: number; pull: number; upgrade: number };
+  missionProgress: { chat: number; pull: number; upgrade: number };
   /** 오늘 이미 수령한 일일 미션. */
-  missionClaimed: { tap: boolean; pull: boolean; upgrade: boolean };
+  missionClaimed: { chat: boolean; pull: boolean; upgrade: boolean };
   /** 채팅/랭킹 등 다른 사람에게 보이는 닉네임 = 매장 이름. */
   venueName: string;
 }

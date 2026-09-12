@@ -178,7 +178,7 @@ export class HUD {
         }
         return;
       case 'claim-mission':
-        if (btn.dataset.mission) changed = this.gameState.claimMission(btn.dataset.mission as 'tap' | 'pull' | 'upgrade');
+        if (btn.dataset.mission) changed = this.gameState.claimMission(btn.dataset.mission as 'chat' | 'pull' | 'upgrade');
         break;
     }
     if (changed) {
@@ -446,8 +446,8 @@ export class HUD {
 
   private renderMissions(): string {
     const gs = this.gameState;
-    const defs: Array<{ type: 'tap' | 'pull' | 'upgrade'; label: string; icon: string }> = [
-      { type: 'tap', label: '테이블 탭하기', icon: '👆' },
+    const defs: Array<{ type: 'chat' | 'pull' | 'upgrade'; label: string; icon: string }> = [
+      { type: 'chat', label: '채팅 보내기', icon: '💬' },
       { type: 'pull', label: '딜러 가챠 뽑기', icon: '🎰' },
       { type: 'upgrade', label: '강화하기(테이블+딜러)', icon: '💪' },
     ];

@@ -11,10 +11,8 @@ import { getCurrentUid, getCurrentUsername } from './account';
 import { loadCloudSave, saveCloudSave } from './cloudSave';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
-const TAP_COOLDOWN_MS = 2000;
-const TAP_BONUS_SECONDS = 5;
-const MISSION_TARGETS = { tap: 10, pull: 3, upgrade: 5 } as const;
-const MISSION_REWARD_SECONDS = { tap: 30, pull: 60, upgrade: 45 } as const;
+const MISSION_TARGETS = { chat: 1, pull: 3, upgrade: 5 } as const;
+const MISSION_REWARD_SECONDS = { chat: 30, pull: 60, upgrade: 45 } as const;
 
 export interface OfflineEarningsResult {
   elapsedMs: number;
@@ -130,15 +128,15 @@ export class GameState {
     return true;
   }
 
-  missionTarget(type: 'tap' | 'pull' | 'upgrade'): number {
+  missionTarget(type: 'chat' | 'pull' | 'upgrade'): number {
     return MISSION_TARGETS[type];
   }
 
-  missionReward(type: 'tap' | 'pull' | 'upgrade'): number {
+  missionReward(type: 'chat' | 'pull' | 'upgrade'): number {
     return this.totalIncomePerSecond() * MISSION_REWARD_SECONDS[type];
   }
 
-  claimMission(type: 'tap' | 'pull' | 'upgrade'): boolean {
+  claimMission(type: 'chat' | 'pull' | 'upgrade'): boolean {
     if (this.data.missionClaimed[type]) return false;
     if (this.data.missionProgress[type] < MISSION_TARGETS[type]) return false;
     const reward = this.missionReward(type);
@@ -146,6 +144,11 @@ export class GameState {
     this.data.totalEarned += reward;
     this.data.missionClaimed[type] = true;
     return true;
+  }
+
+  /** 채팅 위젯에서 메시지를 실제로 보냈을 때 호출 — 오늘의 미션 진행도에 반영. */
+  recordChatSent(): void {
+    this.data.missionProgress.chat += 1;
   }
 
   isBoostActive(): boolean {
@@ -190,8 +193,8 @@ export class GameState {
 
     this.data.loginStreak = isConsecutive ? this.data.loginStreak + 1 : 1;
     this.data.lastLoginDate = today;
-    this.data.missionProgress = { tap: 0, pull: 0, upgrade: 0 };
-    this.data.missionClaimed = { tap: false, pull: false, upgrade: false };
+    this.data.missionProgress = { chat: 0, pull: 0, upgrade: 0 };
+    this.data.missionClaimed = { chat: false, pull: false, upgrade: false };
 
     const cappedStreak = Math.min(this.data.loginStreak, 7);
     const reward = this.totalIncomePerSecond() * 60 * (1 + cappedStreak * 0.15) + 20 * cappedStreak;
@@ -400,7 +403,7 @@ export class GameState {
     const cost = this.nextTableCost();
     if (cost === null || this.data.cash < cost) return false;
     this.data.cash -= cost;
-    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, lastTapAt: 0, customerGrades: [] });
+    this.data.tables.push({ id: this.data.nextTableId++, level: 1, dealerId: null, customerGrades: [] });
     return true;
   }
 
@@ -484,8 +487,9 @@ export class GameState {
         if (otherDealer) otherDealer.assignedTableId = null;
       }
       table.dealerId = dealer.id;
-      // 딜러가 새로 배정되면 매장 디자인 레벨에 따라 손님 8명을 새로 뽑는다 (홀덤 8인 테이블).
-      table.customerGrades = rollCustomerGrades(SEATS_PER_TABLE, designBonusFor(this.data.designLevel));
+      // 딜러가 새로 배정되면 매장 디자인 레벨 + 디자인 특기 딜러 보너스 + 전직 보너스를 반영해 손님 8명을 새로 뽑는다.
+      const designBonus = designBonusFor(this.data.designLevel) * this.specialtyMultiplier('design') * this.jobMultipliers().design;
+      table.customerGrades = rollCustomerGrades(SEATS_PER_TABLE, designBonus);
     }
 
     dealer.assignedTableId = tableId;
@@ -504,19 +508,6 @@ export class GameState {
     for (let i = 0; i < n; i++) {
       this.assignDealer(dealersSorted[i].id, tablesSorted[i].id);
     }
-  }
-
-  tapTable(tableId: number): number {
-    const table = this.data.tables.find((t) => t.id === tableId);
-    if (!table) return 0;
-    const now = Date.now();
-    if (now - table.lastTapAt < TAP_COOLDOWN_MS) return 0;
-    table.lastTapAt = now;
-    const bonus = this.tableIncomePerSecond(table) * TAP_BONUS_SECONDS * this.jobMultipliers().tap * this.specialtyMultiplier('tap');
-    this.data.cash += bonus;
-    this.data.totalEarned += bonus;
-    this.data.missionProgress.tap += 1;
-    return bonus;
   }
 
   advanceVenue(): boolean {

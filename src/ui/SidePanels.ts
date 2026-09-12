@@ -76,8 +76,8 @@ export class SidePanels {
 
   private renderEventModal(): string {
     const gs = this.gameState;
-    const missionDefs: Array<{ type: 'tap' | 'pull' | 'upgrade'; label: string }> = [
-      { type: 'tap', label: '테이블 탭하기' },
+    const missionDefs: Array<{ type: 'chat' | 'pull' | 'upgrade'; label: string }> = [
+      { type: 'chat', label: '채팅 보내기' },
       { type: 'pull', label: '딜러 가챠 뽑기' },
       { type: 'upgrade', label: '강화하기' },
     ];
@@ -128,7 +128,7 @@ export class SidePanels {
       </button>
     `;
 
-    const missionReady = (['tap', 'pull', 'upgrade'] as const).some(
+    const missionReady = (['chat', 'pull', 'upgrade'] as const).some(
       (t) => gs.missionProgress[t] >= gs.missionTarget(t) && !gs.missionClaimed[t]
     );
 

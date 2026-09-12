@@ -50,8 +50,8 @@ body {
 
 /* ---- 하단 HUD: 네비게이션 포함 ---- */
 #hud {
-  flex: 0 0 44vh;
-  height: 44vh;
+  flex: 0 0 36vh;
+  height: 36vh;
   background: var(--panel-bg);
   border-top: 4px solid var(--wood-dark);
   display: flex;
@@ -665,12 +665,14 @@ select {
   text-align: left;
 }
 
-/* ---- 게임 화면 상단 접이식 채팅 ---- */
+/* ---- 게임 화면 우하단(네비게이션 바로 위) 접이식 채팅 ---- */
 #chat-widget {
   position: absolute;
-  top: 6px;
-  left: 60px;
-  right: 60px;
+  bottom: 8px;
+  right: 8px;
+  left: auto;
+  top: auto;
+  width: min(220px, 58vw);
   z-index: 12;
   font-family: 'Courier New', monospace;
 }
@@ -680,12 +682,13 @@ select {
   border: 1px solid var(--wood-dark);
   border-radius: 999px;
   padding: 5px 12px;
-  font-size: clamp(9px, 2.4vw, 12px);
+  font-size: clamp(9px, 2.4vw, 11px);
   color: #fff3d6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  text-align: right;
 }
 
 .chat-collapsed b {
@@ -779,7 +782,7 @@ select {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 8px 4px;
+  padding: 5px 4px;
   font-size: 10px;
   color: #a98a63;
 }

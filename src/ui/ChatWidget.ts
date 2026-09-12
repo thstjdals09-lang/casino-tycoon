@@ -1,4 +1,5 @@
 import { sendChatMessage, subscribeChat, type ChatMessage } from '../game/chat';
+import { emitStateChanged } from '../game/events';
 import type { GameState } from '../game/GameState';
 
 export class ChatWidget {
@@ -12,6 +13,14 @@ export class ChatWidget {
     this.gameState = gameState;
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.root.addEventListener('submit', (e) => this.onSubmit(e));
+
+    // 채팅창을 펼친 상태에서 게임 화면의 다른 빈 곳을 탭하면 접히게.
+    document.addEventListener('pointerdown', (e) => {
+      if (this.expanded && !this.root.contains(e.target as Node)) {
+        this.expanded = false;
+        this.render();
+      }
+    });
 
     subscribeChat((messages) => {
       this.messages = messages;
@@ -43,6 +52,9 @@ export class ChatWidget {
     if (!input || !input.value.trim()) return;
     sendChatMessage(this.gameState.venueName, input.value);
     input.value = '';
+    this.gameState.recordChatSent();
+    this.gameState.save();
+    emitStateChanged();
   }
 
   private scrollToBottom() {

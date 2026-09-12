@@ -162,6 +162,7 @@ export class MainScene extends Phaser.Scene {
     ensurePixelTexture(this, 'plant-decor', plantGrid(), { l: '#4caf6b', t: '#2e7d4f', p: '#c56a3b' }, 6);
     ensurePixelTexture(this, 'frame-decor', frameGrid(), { g: '#c9a227', c: '#2f6b8a', h: '#e8c99b' }, 5);
     ensurePixelTexture(this, 'chandelier-decor', chandelierGrid(), { r: '#8b5a2b', g: '#ffd966', c: '#f5f5f5' }, 5);
+    ensurePixelTexture(this, 'server-npc', humanoidGrid('none'), { ...HUMANOID_PALETTE_BASE, v: '#2a2a2a' }, 5);
   }
 
   private ensureTableTexture(tierId: number): string {
@@ -193,6 +194,22 @@ export class MainScene extends Phaser.Scene {
         const sparkle = this.add.text(width / 2 + 60, 6, '✨', { fontSize: '11px' }).setOrigin(0.5);
         this.tweens.add({ targets: sparkle, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
         this.decor.add(sparkle);
+      }
+
+      // 바가 생기면 서빙 직원이 바 앞을 왔다갔다 돌아다닌다. 레벨(티어)이 높을수록 한 명 더.
+      const serverCount = barTier >= 2 ? 2 : 1;
+      for (let i = 0; i < serverCount; i++) {
+        const startX = width / 2 - 40 + i * 70;
+        const server = this.add.image(startX, 30, 'server-npc').setOrigin(0.5, 1).setScale(0.7);
+        this.decor.add(server);
+        this.tweens.add({
+          targets: server,
+          x: startX + (i % 2 === 0 ? 60 : -60),
+          duration: 2600 + i * 500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
       }
     }
 
@@ -369,13 +386,7 @@ export class MainScene extends Phaser.Scene {
     const dealer = gameState.dealerFor(table);
     const income = gameState.tableIncomePerSecond(table);
 
-    const panel = this.add
-      .rectangle(x, y, 148, 118, 0xffffff, 0.06)
-      .setStrokeStyle(2, 0xffffff, 0.25);
-    panel.setInteractive({ useHandCursor: true });
-    panel.on('pointerup', () => {
-      if (this.dragDistance < 8) this.onTapTable(table.id, x, y);
-    });
+    const panel = this.add.rectangle(x, y, 148, 118, 0xffffff, 0.06).setStrokeStyle(2, 0xffffff, 0.25);
 
     const centerX = x;
     const centerY = y + 34;
@@ -460,28 +471,5 @@ export class MainScene extends Phaser.Scene {
       .text(x, y, '잠김', { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff55' })
       .setOrigin(0.5);
     this.layoutContainer.add([box, label]);
-  }
-
-  private onTapTable(tableId: number, x: number, y: number) {
-    const bonus = gameState.tapTable(tableId);
-    if (bonus <= 0) return;
-    emitStateChanged();
-
-    const floatText = this.add
-      .text(x, y - 50, `+${formatCash(bonus)}`, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#ffd966',
-      })
-      .setOrigin(0.5);
-
-    this.tweens.add({
-      targets: floatText,
-      y: y - 90,
-      alpha: 0,
-      duration: 900,
-      ease: 'Cubic.easeOut',
-      onComplete: () => floatText.destroy(),
-    });
   }
 }
