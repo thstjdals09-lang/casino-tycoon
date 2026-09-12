@@ -740,9 +740,9 @@ export class HUD {
     this.root.innerHTML = `
       ${this.renderJobChoiceModal()}
       ${this.renderWelcomeModal()}
-      ${this.renderGachaRevealModal()}
       ${this.renderSettingsModal()}
       ${this.renderBigPopup()}
+      ${this.renderGachaRevealModal()}
 
       <div class="stat-bar">
         <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>
