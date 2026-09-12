@@ -529,6 +529,19 @@ export class GameState {
     return count;
   }
 
+  /** 보유한 테이블 전부를 한 번에 강화(각각 times번 또는 'max'). 미션 진행도는 1회만 반영. */
+  upgradeAllTables(times: number | 'max'): number {
+    let total = 0;
+    for (const t of this.data.tables) {
+      const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+      let count = 0;
+      while (count < max && this.upgradeTable(t.id)) count++;
+      total += count;
+    }
+    if (total > 0) this.bumpMissionProgress('upgrade');
+    return total;
+  }
+
   /**
    * 딜러 가챠 실제 로직(연출/lastGacha 갱신은 하지 않음). 등급은 확률로 결정되고,
    * 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다. 이미 보유한 딜러가 또 나오면
@@ -600,6 +613,19 @@ export class GameState {
     while (count < max && this.upgradeDealer(dealerId)) count++;
     if (count > 0) this.bumpMissionProgress('upgrade');
     return count;
+  }
+
+  /** 보유한 딜러 전부를 한 번에 강화(각각 times번 또는 'max'). 미션 진행도는 1회만 반영. */
+  upgradeAllDealers(times: number | 'max'): number {
+    let total = 0;
+    for (const d of this.data.dealers) {
+      const max = times === 'max' ? Number.MAX_SAFE_INTEGER : times;
+      let count = 0;
+      while (count < max && this.upgradeDealer(d.id)) count++;
+      total += count;
+    }
+    if (total > 0) this.bumpMissionProgress('upgrade');
+    return total;
   }
 
   assignDealer(dealerId: number, tableId: number | null): void {

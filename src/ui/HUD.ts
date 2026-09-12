@@ -11,7 +11,7 @@ import { HUMANOID_BASE_PALETTE, gridToSvg, humanoidGrid } from '../game/pixelart
 
 const GRADE_ORDER: DealerGrade[] = ['SSR', 'SR', 'R', 'N'];
 
-type Tab = 'table' | 'dealer' | 'compendium' | 'venue';
+type Tab = 'table' | 'venue';
 type OwnedFilter = 'all' | 'owned' | 'unowned';
 type GradeFilter = DealerGrade | 'all';
 
@@ -40,6 +40,7 @@ export class HUD {
   private nicknameError = '';
   private gachaReveal: GachaResult[] | null = null;
   private continuousBatchSize: number | null = null;
+  private bigPopup: 'gacha' | 'roster' | null = null;
   private continuousAccumulatorMs = 0;
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
@@ -129,6 +130,9 @@ export class HUD {
       } else if (this.settingsOpen) {
         this.settingsOpen = false;
         this.render();
+      } else if (this.bigPopup) {
+        this.bigPopup = null;
+        this.render();
       }
       return;
     }
@@ -156,6 +160,16 @@ export class HUD {
     if (action === 'set-tab' && btn.dataset.tab) {
       this.tab = btn.dataset.tab as Tab;
       this.suppressScrollRestore = true;
+      this.render();
+      return;
+    }
+    if (action === 'open-big-popup' && btn.dataset.popup) {
+      this.bigPopup = btn.dataset.popup as 'gacha' | 'roster';
+      this.render();
+      return;
+    }
+    if (action === 'close-big-popup') {
+      this.bigPopup = null;
       this.render();
       return;
     }
@@ -192,6 +206,12 @@ export class HUD {
       case 'auto-assign-dealers':
         this.gameState.autoAssignDealers();
         changed = true;
+        break;
+      case 'upgrade-all-tables':
+        changed = this.gameState.upgradeAllTables(this.buyMultiplier) > 0;
+        break;
+      case 'upgrade-all-dealers':
+        changed = this.gameState.upgradeAllDealers(this.buyMultiplier) > 0;
         break;
       case 'upgrade-stars':
         if (btn.dataset.template) changed = this.gameState.upgradeDealerStars(btn.dataset.template);
@@ -388,6 +408,9 @@ export class HUD {
       <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
         🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
       </button>
+      <button class="big-action upgrade-all" data-action="upgrade-all-tables" ${gs.tables.length === 0 ? 'disabled' : ''}>
+        🔧 전체 테이블 강화${this.multLabel()}
+      </button>
       <div class="row-list">${rows}</div>
       <p class="tab-caption">테이블 (${gs.tables.length}/${tier.maxTables}) · 딜러 배정 시 손님 최대 8명이 착석하며 등급이 높을수록 더 씀씀이가 좋습니다</p>`;
   }
@@ -467,6 +490,9 @@ export class HUD {
       }
       <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
         🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
+      </button>
+      <button class="big-action upgrade-all" data-action="upgrade-all-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
+        🔧 전체 딜러 강화${this.multLabel()}
       </button>
       ${flash}
       ${unlockedFlash}
@@ -586,7 +612,7 @@ export class HUD {
       <div class="advance-block">
         ${
           jobsBlocking
-            ? '<p class="final-tier">전직을 먼저 선택해야 매장을 확장할 수 있습니다. (딜러 탭 옆 팝업 확인)</p>'
+            ? '<p class="final-tier">전직을 먼저 선택해야 매장을 확장할 수 있습니다. (화면 하단 팝업 확인)</p>'
             : advanceCost === null
             ? '<p class="final-tier">🏆 국내 최고 카지노에 도달했습니다!</p>'
             : gs.tables.length < tier.maxTables
@@ -685,17 +711,26 @@ export class HUD {
       </div>`;
   }
 
+  private renderBigPopup(): string {
+    if (!this.bigPopup) return '';
+    const title = this.bigPopup === 'gacha' ? '🎰 뽑기' : '📖 딜러';
+    const content = this.bigPopup === 'gacha' ? this.renderDealerTab() : this.renderCompendiumTab();
+    return `
+      <div class="job-modal">
+        <div class="job-modal-inner big-popup-inner">
+          <div class="big-popup-header">
+            <h2>${title}</h2>
+            <button class="close-settings-btn big-popup-close" data-action="close-big-popup">✕ 닫기</button>
+          </div>
+          <div class="big-popup-body">${content}</div>
+        </div>
+      </div>`;
+  }
+
   private render(): void {
     const gs = this.gameState;
 
-    const tabContent =
-      this.tab === 'table'
-        ? this.renderTableTab()
-        : this.tab === 'dealer'
-        ? this.renderDealerTab()
-        : this.tab === 'compendium'
-        ? this.renderCompendiumTab()
-        : this.renderVenueTab();
+    const tabContent = this.tab === 'table' ? this.renderTableTab() : this.renderVenueTab();
 
     // 전체 다시 그리기 전에 스크롤 위치를 저장해뒀다가 그대로 복원 (강화 버튼 눌렀을 때 목록이 맨 위로 튀는 문제 방지).
     // 단, 탭을 새로 전환한 경우엔 새 탭이니 위에서부터 보여준다.
@@ -707,6 +742,7 @@ export class HUD {
       ${this.renderWelcomeModal()}
       ${this.renderGachaRevealModal()}
       ${this.renderSettingsModal()}
+      ${this.renderBigPopup()}
 
       <div class="stat-bar">
         <div class="cash" id="hud-cash">💰 ${formatCash(gs.cash)}</div>
@@ -722,11 +758,11 @@ export class HUD {
         <button class="nav-btn ${this.tab === 'table' ? 'active' : ''}" data-action="set-tab" data-tab="table">
           <span class="nav-icon">♠</span><span>테이블</span>
         </button>
-        <button class="nav-btn ${this.tab === 'dealer' ? 'active' : ''}" data-action="set-tab" data-tab="dealer">
-          <span class="nav-icon">🎰</span><span>딜러</span>
+        <button class="nav-btn ${this.bigPopup === 'gacha' ? 'active' : ''}" data-action="open-big-popup" data-popup="gacha">
+          <span class="nav-icon">🎰</span><span>뽑기</span>
         </button>
-        <button class="nav-btn ${this.tab === 'compendium' ? 'active' : ''}" data-action="set-tab" data-tab="compendium">
-          <span class="nav-icon">📖</span><span>도감</span>
+        <button class="nav-btn ${this.bigPopup === 'roster' ? 'active' : ''}" data-action="open-big-popup" data-popup="roster">
+          <span class="nav-icon">📖</span><span>딜러</span>
         </button>
         <button class="nav-btn ${this.tab === 'venue' ? 'active' : ''}" data-action="set-tab" data-tab="venue">
           <span class="nav-icon">♦</span><span>매장</span>

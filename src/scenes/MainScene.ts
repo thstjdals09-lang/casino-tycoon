@@ -64,6 +64,7 @@ export class MainScene extends Phaser.Scene {
   private lastTierId = -1;
   private lastDesignLevel = -1;
   private lastBarLevel = -1;
+  private serverSprites: { img: Phaser.GameObjects.Image; cup: Phaser.GameObjects.Text }[] = [];
   private tablePositions = new Map<number, { x: number; y: number }>();
   private dragStartY = 0;
   private dragStartScroll = 0;
@@ -128,6 +129,12 @@ export class MainScene extends Phaser.Scene {
     const autoManaged = gameState.tick(dt);
     if (autoManaged) emitStateChanged();
 
+    // 서빙 직원이 들고 있는 음료 아이콘을 매 프레임 위치에 맞춰 따라다니게 함.
+    for (const s of this.serverSprites) {
+      if (!s.img.active) continue;
+      s.cup.setPosition(s.img.x + 6, s.img.y - 22);
+    }
+
     this.timeSinceSave += deltaMs;
     if (this.timeSinceSave >= AUTOSAVE_MS) {
       this.timeSinceSave = 0;
@@ -182,6 +189,7 @@ export class MainScene extends Phaser.Scene {
 
   private buildDecor() {
     this.decor.removeAll(true);
+    this.serverSprites = [];
     const { width } = this.scale;
     const tier = gameState.tier;
     const designLevel = gameState.designLevel;
@@ -196,20 +204,18 @@ export class MainScene extends Phaser.Scene {
         this.decor.add(sparkle);
       }
 
-      // 바가 생기면 서빙 직원이 바 앞을 왔다갔다 돌아다닌다. 레벨(티어)이 높을수록 한 명 더.
+      // 바가 생기면 서빙 직원이 바에서 테이블까지 음료를 들고 왔다갔다 서빙한다. 레벨(티어)이 높을수록 한 명 더.
       const serverCount = barTier >= 2 ? 2 : 1;
+      const barX = width / 2;
+      const barY = 30;
       for (let i = 0; i < serverCount; i++) {
-        const startX = width / 2 - 40 + i * 70;
-        const server = this.add.image(startX, 30, 'server-npc').setOrigin(0.5, 1).setScale(0.7);
+        const startX = barX - 20 + i * 40;
+        const server = this.add.image(startX, barY, 'server-npc').setOrigin(0.5, 1).setScale(0.7);
+        const cup = this.add.text(startX + 6, barY - 22, '🥤', { fontSize: '10px' }).setOrigin(0.5);
         this.decor.add(server);
-        this.tweens.add({
-          targets: server,
-          x: startX + (i % 2 === 0 ? 60 : -60),
-          duration: 2600 + i * 500,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
+        this.decor.add(cup);
+        this.serverSprites.push({ img: server, cup });
+        this.time.delayedCall(300 + i * 900, () => this.startServerPatrol(server, cup, startX, barY));
       }
     }
 
@@ -239,6 +245,51 @@ export class MainScene extends Phaser.Scene {
       const x = 26 + t * (width - 52);
       this.decor.add(this.add.image(x, 8, key).setOrigin(0.5, 0).setScale(scaleFor(key)));
       slotIdx++;
+    });
+  }
+
+  /** 서빙 직원이 바 ↔ 임의의 테이블을 오가며 음료를 나르는 패트롤. 매번 최신 테이블 위치를 다시 조회한다. */
+  private startServerPatrol(server: Phaser.GameObjects.Image, cup: Phaser.GameObjects.Text, barX: number, barY: number) {
+    if (!server.active) return; // buildDecor가 다시 불려서 이 서버가 이미 파괴됐으면 체인을 멈춘다.
+
+    const positions = Array.from(this.tablePositions.values());
+    if (positions.length === 0) {
+      this.tweens.add({
+        targets: server,
+        x: barX + 30,
+        duration: 1800,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+        onComplete: () => this.time.delayedCall(400, () => this.startServerPatrol(server, cup, barX, barY)),
+      });
+      return;
+    }
+
+    const dest = positions[Math.floor(Math.random() * positions.length)];
+    this.tweens.add({
+      targets: server,
+      x: dest.x,
+      y: dest.y + 44,
+      duration: 1300,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        if (!server.active) return;
+        // 서빙 중엔 잠깐 멈춰서 음료를 놓고 간다.
+        this.time.delayedCall(700, () => {
+          if (!server.active) return;
+          this.tweens.add({
+            targets: server,
+            x: barX,
+            y: barY,
+            duration: 1300,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+              if (!server.active) return;
+              this.time.delayedCall(500, () => this.startServerPatrol(server, cup, barX, barY));
+            },
+          });
+        });
+      },
     });
   }
 

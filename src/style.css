@@ -924,6 +924,47 @@ select {
   text-align: left;
 }
 
+.big-popup-inner {
+  width: 94vw;
+  max-width: 640px;
+  height: 82vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.big-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex: 0 0 auto;
+}
+
+.big-popup-header h2 {
+  margin: 0;
+}
+
+.big-popup-close {
+  width: auto;
+  margin: 0;
+  padding: 6px 12px;
+}
+
+.big-popup-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.big-action.upgrade-all {
+  background: linear-gradient(180deg, #4f8fe0, #2f5ea8);
+  border-color: #1f3e78;
+}
+
 /* ---- 로그인/계정 생성 게이트 ---- */
 #auth-gate {
   position: fixed;
