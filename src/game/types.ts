@@ -14,6 +14,8 @@ export interface DealerInstance {
   level: number;
   grade: DealerGrade;
   templateId: string;
+  /** 별 등급(성급). 1부터 시작, 중복 딜러 재고를 소모해 업그레이드로만 올라간다. */
+  stars: number;
   assignedTableId: number | null;
 }
 
@@ -73,4 +75,6 @@ export interface GameSaveData {
   missionClaimed: { chat: boolean; pull: boolean; upgrade: boolean };
   /** 채팅/랭킹 등 다른 사람에게 보이는 닉네임 = 매장 이름. */
   venueName: string;
+  /** 이미 보유한 딜러를 또 뽑았을 때 쌓이는 중복 재고. 성급 업그레이드에 소모된다. templateId -> 개수. */
+  dupeStock: Record<string, number>;
 }

@@ -6,7 +6,7 @@ import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMulti
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
-import { rollTemplate, templateById, starLevelFor, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
+import { rollTemplate, templateById, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
 import { getCurrentUid, getCurrentUsername } from './account';
 import { loadCloudSave, saveCloudSave } from './cloudSave';
 
@@ -27,6 +27,8 @@ export interface DailyLoginResult {
 export interface GachaResult {
   dealerId: number;
   grade: DealerGrade;
+  templateId: string;
+  isDuplicate: boolean;
 }
 
 export class GameState {
@@ -233,8 +235,8 @@ export class GameState {
   }
 
   /**
-   * 이름 붙은 딜러들의 특수효과 배율. income/bar/tap은 "배치"된 딜러만, gacha는 "보유"만 해도 적용(보유효과).
-   * 같은 딜러를 여러 명 보유하면 별 등급이 올라 개체당 효과도 함께 커진다(합연산으로 누적).
+   * 이름 붙은 딜러들의 특수효과 배율. income/bar/design은 "배치"된 딜러만, gacha는 "보유"만 해도 적용(보유효과).
+   * 성급(별)이 높을수록 개체당 효과도 함께 커진다(합연산으로 누적).
    */
   private specialtyMultiplier(type: SpecialtyType): number {
     const requiresAssignment = type !== 'gacha';
@@ -243,34 +245,46 @@ export class GameState {
       if (requiresAssignment && d.assignedTableId === null) continue;
       const t = templateById(d.templateId);
       if (t.specialty !== type) continue;
-      const owned = this.countOwned(d.templateId);
-      bonus += t.specialtyValue * starMultiplierFor(t.grade, owned);
+      bonus += t.specialtyValue * starMultiplierFor(t.grade, d.stars);
     }
     return 1 + bonus;
   }
 
-  private countOwned(templateId: string): number {
-    return this.data.dealers.filter((d) => d.templateId === templateId).length;
-  }
-
-  /** 만성(별 만렙) 달성한 딜러들의 "각성 스킬" 보너스 합. 템플릿당 한 번만 적용(보유 개수와 무관). */
+  /** 만성(별 만렙) 달성한 딜러들의 "각성 스킬" 보너스 합. */
   private maxStarBonusMultiplier(): number {
     let bonus = 0;
-    const seen = new Set<string>();
     for (const d of this.data.dealers) {
-      if (seen.has(d.templateId)) continue;
-      seen.add(d.templateId);
-      const t = templateById(d.templateId);
-      if (isMaxStars(t.grade, this.countOwned(t.id))) bonus += STAR_CONFIG[t.grade].maxStarBonus;
+      if (isMaxStars(d.grade, d.stars)) bonus += STAR_CONFIG[d.grade].maxStarBonus;
     }
     return 1 + bonus;
   }
 
-  /** 특정 딜러(템플릿)의 현재 별 개수, 보유 개수, 상한. UI 표시용. */
-  starInfoFor(templateId: string): { stars: number; owned: number; maxStars: number; isMax: boolean } {
+  /** 특정 딜러(템플릿)의 현재 별 등급/중복 재고/업그레이드 비용. UI 표시·업그레이드 판정용. */
+  starInfoFor(templateId: string): { stars: number; maxStars: number; isMax: boolean; dupeStock: number; dupeCost: number } {
     const t = templateById(templateId);
-    const owned = this.countOwned(templateId);
-    return { stars: starLevelFor(t.grade, owned), owned, maxStars: STAR_CONFIG[t.grade].maxStars, isMax: isMaxStars(t.grade, owned) };
+    const cfg = STAR_CONFIG[t.grade];
+    const dealer = this.data.dealers.find((d) => d.templateId === templateId);
+    const stars = dealer?.stars ?? 0;
+    return {
+      stars,
+      maxStars: cfg.maxStars,
+      isMax: stars > 0 && isMaxStars(t.grade, stars),
+      dupeStock: this.data.dupeStock[templateId] ?? 0,
+      dupeCost: cfg.dupeCostPerStar,
+    };
+  }
+
+  /** 중복 재고를 소모해 별 등급을 하나 올린다. */
+  upgradeDealerStars(templateId: string): boolean {
+    const dealer = this.data.dealers.find((d) => d.templateId === templateId);
+    if (!dealer) return false;
+    const cfg = STAR_CONFIG[dealer.grade];
+    if (dealer.stars >= cfg.maxStars) return false;
+    const stock = this.data.dupeStock[templateId] ?? 0;
+    if (stock < cfg.dupeCostPerStar) return false;
+    this.data.dupeStock[templateId] = stock - cfg.dupeCostPerStar;
+    dealer.stars += 1;
+    return true;
   }
 
   tableIncomePerSecond(table: TableInstance): number {
@@ -426,7 +440,11 @@ export class GameState {
     return count;
   }
 
-  /** 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다. */
+  /**
+   * 딜러 가챠 뽑기. 등급은 확률로 결정되고, 전직/보유 딜러 효과로 고급 등급 확률이 오를 수 있다.
+   * 이미 보유한 딜러가 또 나오면 같은 딜러를 여러 테이블에 배치할 수 없도록 새 자리를 만들지
+   * 않고, 중복 재고로 쌓아서 성급 업그레이드에 쓸 수 있게 한다.
+   */
   pullDealer(): GachaResult | null {
     const cost = this.nextGachaCost();
     if (this.data.cash < cost) return null;
@@ -434,16 +452,26 @@ export class GameState {
     const gachaRate = this.jobMultipliers().gacha * this.specialtyMultiplier('gacha');
     const grade = rollGrade(gachaRate);
     const template = rollTemplate(grade);
-    const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, grade, templateId: template.id, assignedTableId: null };
-    this.data.dealers.push(dealer);
     this.data.dealerPulls[grade] += 1;
     this.data.missionProgress.pull += 1;
+
+    const existing = this.data.dealers.find((d) => d.templateId === template.id);
+    let dealerId: number;
+    const isDuplicate = existing !== undefined;
+    if (existing) {
+      this.data.dupeStock[template.id] = (this.data.dupeStock[template.id] ?? 0) + 1;
+      dealerId = existing.id;
+    } else {
+      const dealer: DealerInstance = { id: this.data.nextDealerId++, level: 1, stars: 1, grade, templateId: template.id, assignedTableId: null };
+      this.data.dealers.push(dealer);
+      dealerId = dealer.id;
+    }
 
     const newly = checkNewAchievements(this.data.dealerPulls, this.data.achievements);
     this.lastUnlockedAchievements = newly.map((id) => ACHIEVEMENTS.find((a) => a.id === id)!).filter(Boolean);
     this.data.achievements.push(...newly);
 
-    const result: GachaResult = { dealerId: dealer.id, grade };
+    const result: GachaResult = { dealerId, grade, templateId: template.id, isDuplicate };
     this.lastGacha = result;
     return result;
   }

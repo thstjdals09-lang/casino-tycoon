@@ -154,6 +154,9 @@ export class HUD {
         this.gameState.autoAssignDealers();
         changed = true;
         break;
+      case 'upgrade-stars':
+        if (btn.dataset.template) changed = this.gameState.upgradeDealerStars(btn.dataset.template);
+        break;
       case 'advance-venue':
         changed = this.gameState.advanceVenue();
         break;
@@ -328,9 +331,9 @@ export class HUD {
     const flash = last
       ? (() => {
           const cfg = gradeConfig(last.grade);
-          const dealer = gs.dealers.find((d) => d.id === last.dealerId);
-          const name = dealer ? templateById(dealer.templateId).name : '';
-          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] ${name} 획득!</div>`;
+          const name = templateById(last.templateId).name;
+          const msg = last.isDuplicate ? `${name} 중복! 중복재고 +1 (성급 업그레이드에 사용)` : `${name} 신규 획득!`;
+          return `<div class="gacha-flash" style="color:${gradeHex(cfg.color)}">🎉 [${cfg.label}] ${msg}</div>`;
         })()
       : '';
 
@@ -349,12 +352,15 @@ export class HUD {
           <div class="row">
             <div class="row-main">
               <span class="row-title" style="color:${gradeHex(cfg.color)}">[${cfg.label}] ${template.name} · Lv.${d.level}</span>
-              <span class="row-sub star-line" style="color:${gradeHex(cfg.color)}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' (만성 ✨)' : ` (보유 ${star.owned}명)`}</span>
+              <span class="row-sub star-line" style="color:${gradeHex(cfg.color)}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' (만성 ✨)' : ` · 중복재고 ${star.dupeStock}/${star.dupeCost}`}</span>
               <span class="row-sub">${d.assignedTableId !== null ? `테이블 #${d.assignedTableId + 1} 배정 중` : '대기 중'} · ${meta.kind}: ${meta.label} +${(template.specialtyValue * 100).toFixed(0)}%p</span>
             </div>
             <div class="row-details">
               <button data-action="upgrade-dealer" data-id="${d.id}" data-cost="${upgradeCost}" ${gs.cash < upgradeCost ? 'disabled' : ''}>
                 교육${this.multLabel()} (${formatCash(upgradeCost)}~)
+              </button>
+              <button data-action="upgrade-stars" data-template="${d.templateId}" ${!star.isMax && star.dupeStock >= star.dupeCost ? '' : 'disabled'}>
+                ⭐ 성급 업 (재고 ${star.dupeCost}개)
               </button>
             </div>
           </div>`;
@@ -368,7 +374,7 @@ export class HUD {
       ${flash}
       ${unlockedFlash}
       <div class="row-list">${rows || '<p class="empty">뽑은 딜러가 없습니다.</p>'}</div>
-      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2% · 등급별 효과는 도감 탭에서 확인</p>`;
+      <p class="tab-caption">딜러 (${gs.dealers.length}) · N 60% · R 28% · SR 10% · SSR 2% · 이미 보유한 딜러가 또 나오면 중복재고로 쌓여요 (같은 딜러 중복 배치 불가, ⭐성급 업으로 소모)</p>`;
   }
 
   private renderCompendiumTab(): string {
@@ -411,7 +417,7 @@ export class HUD {
             <div class="compendium-info">
               <div class="row-main">
                 <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${gcfg.label}] ${t.name}</span>
-                ${owned ? `<span class="row-sub star-line" style="${colorStyle}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' 만성 ✨' : ` (보유 ${star.owned}명)`}</span>` : ''}
+                ${owned ? `<span class="row-sub star-line" style="${colorStyle}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' 만성 ✨' : ` · 중복재고 ${star.dupeStock}/${star.dupeCost}`}</span>` : ''}
                 <span class="row-sub">${owned ? t.flavor : '???'}</span>
               </div>
               <div class="effect-detail">
