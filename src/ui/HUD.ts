@@ -5,7 +5,8 @@ import { gradeConfig, type DealerGrade } from '../game/gacha';
 import { JOBS } from '../game/jobs';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { customerGradeConfig } from '../game/customers';
-import { DEALER_ROSTER, STAR_CONFIG, specialtyMeta, templateById } from '../game/dealerRoster';
+import { DEALER_ROSTER, STAR_CONFIG, accessoryForGrade, specialtyMeta, templateById } from '../game/dealerRoster';
+import { HUMANOID_BASE_PALETTE, gridToSvg, humanoidGrid } from '../game/pixelart';
 
 const GRADE_ORDER: DealerGrade[] = ['SSR', 'SR', 'R', 'N'];
 
@@ -19,6 +20,11 @@ function gradeHex(color: number): string {
 
 function starsDisplay(stars: number, maxStars: number): string {
   return '★'.repeat(stars) + '☆'.repeat(Math.max(0, maxStars - stars));
+}
+
+function dealerPortraitSvg(grade: DealerGrade, colorHex: string): string {
+  const grid = humanoidGrid(accessoryForGrade(grade));
+  return gridToSvg(grid, { ...HUMANOID_BASE_PALETTE, v: colorHex, c: '#ffd700', a: '#e0455c' }, 4);
 }
 
 export class HUD {
@@ -372,16 +378,20 @@ export class HUD {
         const star = gs.starInfoFor(t.id);
         const colorStyle = owned ? `color:${gradeHex(gcfg.color)}` : 'color:#7a6a5a; filter:grayscale(1);';
         const meta = specialtyMeta(t.specialty);
+        const portrait = dealerPortraitSvg(t.grade, gradeHex(gcfg.color));
         return `
           <div class="row compendium-row ${owned ? '' : 'row-unowned'}">
-            <div class="row-main">
-              <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${gcfg.label}] ${t.name}</span>
-              ${owned ? `<span class="row-sub star-line" style="${colorStyle}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' 만성 ✨' : ` (보유 ${star.owned}명)`}</span>` : ''}
-              <span class="row-sub">${owned ? t.flavor : '???'}</span>
-            </div>
-            <div class="effect-detail">
-              <div class="effect-line">${meta.kind === '보유효과' ? '👜' : '🪑'} <b>${meta.kind}</b> — ${meta.label} +${(t.specialtyValue * 100).toFixed(0)}%p${meta.kind === '배치효과' ? ' (테이블에 배정 시)' : ' (보유만 해도 적용)'} · 별 하나당 +${(STAR_CONFIG[t.grade].bonusPerStar * 100).toFixed(0)}%</div>
-              <div class="effect-line">🌟 <b>만성 각성</b> — ${star.maxStars}성 달성 시 전체 수익 +${(STAR_CONFIG[t.grade].maxStarBonus * 100).toFixed(0)}% 영구 적용</div>
+            <div class="dealer-portrait ${owned ? '' : 'portrait-locked'}">${portrait}</div>
+            <div class="compendium-info">
+              <div class="row-main">
+                <span class="row-title" style="${colorStyle}">${owned ? '' : '🔒 '}[${gcfg.label}] ${t.name}</span>
+                ${owned ? `<span class="row-sub star-line" style="${colorStyle}">${starsDisplay(star.stars, star.maxStars)}${star.isMax ? ' 만성 ✨' : ` (보유 ${star.owned}명)`}</span>` : ''}
+                <span class="row-sub">${owned ? t.flavor : '???'}</span>
+              </div>
+              <div class="effect-detail">
+                <div class="effect-line">${meta.kind === '보유효과' ? '👜' : '🪑'} <b>${meta.kind}</b> — ${meta.label} +${(t.specialtyValue * 100).toFixed(0)}%p${meta.kind === '배치효과' ? ' (테이블에 배정 시)' : ' (보유만 해도 적용)'} · 별 하나당 +${(STAR_CONFIG[t.grade].bonusPerStar * 100).toFixed(0)}%</div>
+                <div class="effect-line">🌟 <b>만성 각성</b> — ${star.maxStars}성 달성 시 전체 수익 +${(STAR_CONFIG[t.grade].maxStarBonus * 100).toFixed(0)}% 영구 적용</div>
+              </div>
             </div>
           </div>`;
       })

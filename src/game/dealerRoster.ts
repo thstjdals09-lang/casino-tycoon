@@ -2,6 +2,13 @@ import type { DealerGrade } from './gacha';
 
 export type SpecialtyType = 'income' | 'bar' | 'tap' | 'gacha';
 
+/** 등급이 높을수록 도트 초상화에 모자/왕관이 붙는다 (MainScene의 실제 딜러 스프라이트와 동일 규칙). */
+export function accessoryForGrade(grade: DealerGrade): 'none' | 'hat' | 'crown' {
+  if (grade === 'SSR') return 'crown';
+  if (grade === 'SR') return 'hat';
+  return 'none';
+}
+
 export interface DealerTemplate {
   id: string;
   name: string;

@@ -92,6 +92,34 @@ body {
 
 .compendium-row {
   align-items: flex-start;
+  flex-direction: row !important;
+  gap: 10px;
+}
+
+.dealer-portrait {
+  flex: 0 0 auto;
+  width: 26px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.dealer-portrait svg {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.dealer-portrait.portrait-locked svg {
+  filter: grayscale(1) brightness(0.45);
+}
+
+.compendium-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .effect-detail {

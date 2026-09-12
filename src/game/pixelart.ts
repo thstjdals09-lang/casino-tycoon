@@ -3,6 +3,9 @@ import Phaser from 'phaser';
 export type PixelGrid = string[];
 export type Palette = Record<string, string>;
 
+/** 딜러/손님 실루엣 공용 기본 팔레트 (v/c/a는 등급·용도별로 덮어써서 사용). */
+export const HUMANOID_BASE_PALETTE: Palette = { h: '#2b2320', s: '#f5c9a0', w: '#ffffff', p: '#33415c', b: '#1a1a1a' };
+
 function fillRow(width: number, fill: string, overrides: Record<number, string> = {}): string {
   const arr = new Array(width).fill(fill);
   for (const [i, ch] of Object.entries(overrides)) arr[Number(i)] = ch;
@@ -162,6 +165,24 @@ export function chandelierGrid(): PixelGrid {
   }
   rows.push(cutCorners(14, 'g', 4));
   return rows;
+}
+
+/** 픽셀 격자를 HTML용 인라인 SVG 문자열로 변환 (도감 등 DOM 안에 직접 박아넣을 때 사용). */
+export function gridToSvg(grid: PixelGrid, palette: Palette, pixelSize = 4): string {
+  const h = grid.length;
+  const w = grid[0].length;
+  let rects = '';
+  for (let y = 0; y < h; y++) {
+    const row = grid[y];
+    for (let x = 0; x < w; x++) {
+      const ch = row[x];
+      if (ch === '.' || ch === undefined) continue;
+      const color = palette[ch];
+      if (!color) continue;
+      rects += `<rect x="${x * pixelSize}" y="${y * pixelSize}" width="${pixelSize}" height="${pixelSize}" fill="${color}"/>`;
+    }
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w * pixelSize}" height="${h * pixelSize}" viewBox="0 0 ${w * pixelSize} ${h * pixelSize}" shape-rendering="crispEdges">${rects}</svg>`;
 }
 
 export function ensurePixelTexture(
