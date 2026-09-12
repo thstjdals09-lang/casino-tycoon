@@ -220,6 +220,11 @@ select {
   color: #d8b98a;
 }
 
+.star-line {
+  font-size: 11px !important;
+  letter-spacing: 1px;
+}
+
 .empty {
   font-size: 12px;
   color: #a98a63;

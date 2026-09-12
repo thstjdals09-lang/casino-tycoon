@@ -62,3 +62,38 @@ export function rollTemplate(grade: DealerGrade): DealerTemplate {
   const pool = templatesForGrade(grade);
   return pool[Math.floor(Math.random() * pool.length)];
 }
+
+/**
+ * 별 등급(성급) 시스템: 같은 딜러를 중복으로 뽑을 때마다 별이 올라간다.
+ * 등급이 희귀할수록 별 하나당 보너스가 크고, 대신 만성에 필요한 별 개수는 적다
+ * (SSR은 3성이면 만렙, 대신 성 하나하나가 묵직함).
+ */
+export interface StarConfig {
+  maxStars: number;
+  /** 1성을 넘어 별 하나 오를 때마다 특기 수치에 곱해지는 보너스. */
+  bonusPerStar: number;
+  /** 만성 달성 시 추가로 터지는 "각성 스킬": 전체 수익에 곱연산으로 영구 적용. */
+  maxStarBonus: number;
+}
+
+export const STAR_CONFIG: Record<DealerGrade, StarConfig> = {
+  N: { maxStars: 5, bonusPerStar: 0.1, maxStarBonus: 0.02 },
+  R: { maxStars: 5, bonusPerStar: 0.15, maxStarBonus: 0.04 },
+  SR: { maxStars: 4, bonusPerStar: 0.2, maxStarBonus: 0.07 },
+  SSR: { maxStars: 3, bonusPerStar: 0.3, maxStarBonus: 0.12 },
+};
+
+/** 보유 개수(ownedCount)를 등급별 상한 안에서 별 개수로 환산. */
+export function starLevelFor(grade: DealerGrade, ownedCount: number): number {
+  return Math.min(STAR_CONFIG[grade].maxStars, Math.max(0, ownedCount));
+}
+
+/** 별 등급에 따라 특기 수치에 곱해지는 배율 (1성=기본, 별 하나 오를 때마다 증가). */
+export function starMultiplierFor(grade: DealerGrade, ownedCount: number): number {
+  const stars = starLevelFor(grade, ownedCount);
+  return 1 + Math.max(0, stars - 1) * STAR_CONFIG[grade].bonusPerStar;
+}
+
+export function isMaxStars(grade: DealerGrade, ownedCount: number): boolean {
+  return starLevelFor(grade, ownedCount) >= STAR_CONFIG[grade].maxStars;
+}

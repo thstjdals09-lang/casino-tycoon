@@ -6,7 +6,7 @@ import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMulti
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
-import { rollTemplate, templateById, type SpecialtyType } from './dealerRoster';
+import { rollTemplate, templateById, starLevelFor, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 2000;
@@ -216,7 +216,7 @@ export class GameState {
 
   /**
    * 이름 붙은 딜러들의 특수효과 배율. income/bar/tap은 "배치"된 딜러만, gacha는 "보유"만 해도 적용(보유효과).
-   * 여러 명이면 합연산으로 누적(1 + 합).
+   * 같은 딜러를 여러 명 보유하면 별 등급이 올라 개체당 효과도 함께 커진다(합연산으로 누적).
    */
   private specialtyMultiplier(type: SpecialtyType): number {
     const requiresAssignment = type !== 'gacha';
@@ -225,9 +225,34 @@ export class GameState {
       if (requiresAssignment && d.assignedTableId === null) continue;
       const t = templateById(d.templateId);
       if (t.specialty !== type) continue;
-      bonus += t.specialtyValue;
+      const owned = this.countOwned(d.templateId);
+      bonus += t.specialtyValue * starMultiplierFor(t.grade, owned);
     }
     return 1 + bonus;
+  }
+
+  private countOwned(templateId: string): number {
+    return this.data.dealers.filter((d) => d.templateId === templateId).length;
+  }
+
+  /** 만성(별 만렙) 달성한 딜러들의 "각성 스킬" 보너스 합. 템플릿당 한 번만 적용(보유 개수와 무관). */
+  private maxStarBonusMultiplier(): number {
+    let bonus = 0;
+    const seen = new Set<string>();
+    for (const d of this.data.dealers) {
+      if (seen.has(d.templateId)) continue;
+      seen.add(d.templateId);
+      const t = templateById(d.templateId);
+      if (isMaxStars(t.grade, this.countOwned(t.id))) bonus += STAR_CONFIG[t.grade].maxStarBonus;
+    }
+    return 1 + bonus;
+  }
+
+  /** 특정 딜러(템플릿)의 현재 별 개수, 보유 개수, 상한. UI 표시용. */
+  starInfoFor(templateId: string): { stars: number; owned: number; maxStars: number; isMax: boolean } {
+    const t = templateById(templateId);
+    const owned = this.countOwned(templateId);
+    return { stars: starLevelFor(t.grade, owned), owned, maxStars: STAR_CONFIG[t.grade].maxStars, isMax: isMaxStars(t.grade, owned) };
   }
 
   tableIncomePerSecond(table: TableInstance): number {
@@ -315,7 +340,8 @@ export class GameState {
       collectionMultiplier(this.data.dealers) *
       jobsIncome *
       achievementMultiplier(this.data.achievements) *
-      this.specialtyMultiplier('income');
+      this.specialtyMultiplier('income') *
+      this.maxStarBonusMultiplier();
     const barIncome = this.barIncomePerSecond() * jobsIncome;
     const boostMult = this.isBoostActive() ? 2 : 1;
     return (tableIncome + barIncome) * boostMult;
