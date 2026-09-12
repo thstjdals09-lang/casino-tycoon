@@ -110,15 +110,15 @@ export interface StarConfig {
   bonusPerStar: number;
   /** 만성 달성 시 추가로 터지는 "각성 스킬": 전체 수익에 곱연산으로 영구 적용. */
   maxStarBonus: number;
-  /** 별 하나를 올리는 데 필요한 중복 딜러(재고) 개수. */
-  dupeCostPerStar: number;
+  /** 1성→2성으로 올릴 때 필요한 기본 중복 재고 개수. 별이 오를수록 필요 개수가 점점 늘어난다. */
+  baseDupeCost: number;
 }
 
 export const STAR_CONFIG: Record<DealerGrade, StarConfig> = {
-  N: { maxStars: 5, bonusPerStar: 0.1, maxStarBonus: 0.02, dupeCostPerStar: 2 },
-  R: { maxStars: 5, bonusPerStar: 0.15, maxStarBonus: 0.04, dupeCostPerStar: 2 },
-  SR: { maxStars: 4, bonusPerStar: 0.2, maxStarBonus: 0.07, dupeCostPerStar: 1 },
-  SSR: { maxStars: 3, bonusPerStar: 0.3, maxStarBonus: 0.12, dupeCostPerStar: 1 },
+  N: { maxStars: 5, bonusPerStar: 0.1, maxStarBonus: 0.02, baseDupeCost: 2 },
+  R: { maxStars: 5, bonusPerStar: 0.15, maxStarBonus: 0.04, baseDupeCost: 2 },
+  SR: { maxStars: 4, bonusPerStar: 0.2, maxStarBonus: 0.07, baseDupeCost: 1 },
+  SSR: { maxStars: 3, bonusPerStar: 0.3, maxStarBonus: 0.12, baseDupeCost: 1 },
 };
 
 /** 현재 별 개수(1~maxStars) 기준으로 특기 수치에 곱해지는 배율. */
@@ -129,4 +129,9 @@ export function starMultiplierFor(grade: DealerGrade, stars: number): number {
 
 export function isMaxStars(grade: DealerGrade, stars: number): boolean {
   return stars >= STAR_CONFIG[grade].maxStars;
+}
+
+/** currentStars(업그레이드 전 별 개수)에서 바로 다음 별로 올리는 데 필요한 중복 재고 개수. 별이 오를수록 더 많이 필요(1성→2성 대비 2배, 3배...). */
+export function dupeCostForNextStar(grade: DealerGrade, currentStars: number): number {
+  return STAR_CONFIG[grade].baseDupeCost * Math.max(1, currentStars);
 }

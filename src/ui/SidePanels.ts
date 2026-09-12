@@ -56,6 +56,13 @@ export class SidePanels {
 
   private onClick(e: Event) {
     const target = e.target as HTMLElement;
+
+    if (target.classList.contains('job-modal')) {
+      this.openModal = 'none';
+      this.render();
+      return;
+    }
+
     const btn = target.closest<HTMLElement>('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;

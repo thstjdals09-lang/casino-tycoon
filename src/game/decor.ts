@@ -49,10 +49,11 @@ export function barVisualTier(level: number): 0 | 1 | 2 | 3 {
   return 3;
 }
 
-/** 바 레벨 + 착석 손님 수 + 손님 등급 배율 합으로 초당 바 매출을 계산. */
+/** 바 레벨 + 착석 손님 수 + 손님 등급 배율 합으로 초당 다이아 산출량을 계산.
+ * 다이아는 가챠 전용 프리미엄 재화라 일부러 아주 천천히(선형으로) 쌓이게 설계 — 지수형으로 두면
+ * 바 레벨이 조금만 올라도 가챠가 사실상 무한이 돼버려서 컨텐츠(딜러 도감)가 순식간에 동나 버린다. */
 export function barIncomePerSecond(level: number, seatedDrinkMultiplierSum: number): number {
   if (level <= 0) return 0;
-  const price = drinkPriceFor(level);
-  // 손님이 없어도 카운터 손님 정도의 기본 매출은 소량 발생.
-  return price * (0.4 + seatedDrinkMultiplierSum * 0.5);
+  const base = 0.08 * level;
+  return base * (0.5 + seatedDrinkMultiplierSum * 0.3);
 }

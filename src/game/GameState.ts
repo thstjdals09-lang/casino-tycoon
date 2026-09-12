@@ -1,18 +1,18 @@
 import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig, MissionType } from './types';
 import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
-import { createNewSave, loadSave, persistSave, resetSave, SAVE_VERSION } from './SaveManager';
+import { createNewSave, loadSave, persistSave, resetSave, SAVE_VERSION, CONTENT_PATCH_VERSION } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
-import { rollTemplate, templateById, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
+import { rollTemplate, templateById, starMultiplierFor, isMaxStars, dupeCostForNextStar, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
 import { getCurrentUid, getCurrentUsername } from './account';
 import { loadCloudSave, saveCloudSave } from './cloudSave';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 /** 딜러 가챠 1회 고정 다이아 가격. 더 이상 보유 딜러 수에 따라 오르지 않는다. */
-const GACHA_DIAMOND_COST = 10;
+const GACHA_DIAMOND_COST = 50;
 
 type MissionPeriod = 'daily' | 'weekly' | 'monthly';
 const DAILY_TARGETS: Record<MissionType, number> = { chat: 1, pull: 3, upgrade: 5 };
@@ -342,7 +342,7 @@ export class GameState {
     return 1 + bonus;
   }
 
-  /** 특정 딜러(템플릿)의 현재 별 등급/중복 재고/업그레이드 비용. UI 표시·업그레이드 판정용. */
+  /** 특정 딜러(템플릿)의 현재 별 등급/중복 재고/다음 별까지 필요한 비용. UI 표시·업그레이드 판정용. */
   starInfoFor(templateId: string): { stars: number; maxStars: number; isMax: boolean; dupeStock: number; dupeCost: number } {
     const t = templateById(templateId);
     const cfg = STAR_CONFIG[t.grade];
@@ -353,19 +353,20 @@ export class GameState {
       maxStars: cfg.maxStars,
       isMax: stars > 0 && isMaxStars(t.grade, stars),
       dupeStock: this.data.dupeStock[templateId] ?? 0,
-      dupeCost: cfg.dupeCostPerStar,
+      dupeCost: dupeCostForNextStar(t.grade, Math.max(1, stars)),
     };
   }
 
-  /** 중복 재고를 소모해 별 등급을 하나 올린다. */
+  /** 중복 재고를 소모해 별 등급을 하나 올린다. 별이 오를수록 다음 업그레이드에 필요한 재고가 늘어난다. */
   upgradeDealerStars(templateId: string): boolean {
     const dealer = this.data.dealers.find((d) => d.templateId === templateId);
     if (!dealer) return false;
     const cfg = STAR_CONFIG[dealer.grade];
     if (dealer.stars >= cfg.maxStars) return false;
+    const cost = dupeCostForNextStar(dealer.grade, dealer.stars);
     const stock = this.data.dupeStock[templateId] ?? 0;
-    if (stock < cfg.dupeCostPerStar) return false;
-    this.data.dupeStock[templateId] = stock - cfg.dupeCostPerStar;
+    if (stock < cost) return false;
+    this.data.dupeStock[templateId] = stock - cost;
     dealer.stars += 1;
     return true;
   }
@@ -680,14 +681,6 @@ export class GameState {
     for (let guard = 0; guard < 50 && this.data.cash >= this.barUpgradeCost(); guard++) this.upgradeBar();
   }
 
-  /** 연속 뽑기 on일 때 다이아가 있는 동안 조용히(연출 없이) 계속 가챠를 돌린다. */
-  private autoPull(): void {
-    if (!this.data.autoPullEnabled) return;
-    for (let guard = 0; guard < 500 && this.diamonds >= this.nextGachaCost(); guard++) {
-      this.pullOnce();
-    }
-  }
-
   /** deltaSeconds만큼 수익을 누적하고, 반환값이 true면 자동 처리가 실제로 실행된 틱이라 화면을 다시 그려야 한다. */
   tick(deltaSeconds: number): boolean {
     const earned = this.totalIncomePerSecond() * deltaSeconds;
@@ -699,10 +692,8 @@ export class GameState {
     if (this.autoManageAccumulator >= 1) {
       this.autoManageAccumulator = 0;
       const didUpgrade = this.data.autoUpgradeEnabled;
-      const didPull = this.data.autoPullEnabled;
       if (didUpgrade) this.autoManage();
-      if (didPull) this.autoPull();
-      return didUpgrade || didPull;
+      return didUpgrade;
     }
     return false;
   }
@@ -730,16 +721,18 @@ export class GameState {
    * 이 계정의 클라우드 세이브가 아직 없으면(신규 계정), 이 브라우저에 다른 계정이
    * 남겨뒀을 수도 있는 로컬 데이터를 물려받지 않도록 새 세이브로 시작해서 올려둔다.
    *
-   * 버전이 달라도(개발 중 세이브 구조가 바뀌어도) 통째로 밀어버리지 않고, 기본값 위에
+   * 버전이 달라도(개발 중 세이브 구조가 바뀌어도) 평소엔 통째로 밀어버리지 않고, 기본값 위에
    * 클라우드 데이터를 덮어씌우는 방식으로 병합한다 — 그래야 세이브 포맷을 자주 바꿔도
-   * 매번 진행상황이 초기화되지 않는다.
+   * 매번 진행상황이 초기화되지 않는다. 단, 밸런스/컨텐츠가 크게 바뀌는 패치에서는
+   * contentPatchVersion을 올려서 이번만 예외적으로 전체 계정을 강제 초기화할 수 있다.
    */
   async hydrateFromCloud(): Promise<void> {
     const uid = getCurrentUid();
     if (!uid) return;
     const defaults = createNewSave(getCurrentUsername() ?? '이름없는매장');
     const cloud = await loadCloudSave(uid);
-    if (cloud) {
+    const forceReset = !cloud || (cloud.contentPatchVersion ?? 0) < CONTENT_PATCH_VERSION;
+    if (cloud && !forceReset) {
       this.data = {
         ...defaults,
         ...cloud,

@@ -39,6 +39,8 @@ export class HUD {
   private welcomeBack: { offline: OfflineEarningsResult; daily: DailyLoginResult | null } | null = null;
   private nicknameError = '';
   private gachaReveal: GachaResult[] | null = null;
+  private continuousBatchSize: number | null = null;
+  private continuousAccumulatorMs = 0;
   private buyMultiplier: 1 | 10 | 100 | 'max' = 1;
 
   constructor(root: HTMLElement, gameState: GameState) {
@@ -59,6 +61,24 @@ export class HUD {
    */
   refresh(): void {
     const gs = this.gameState;
+
+    if (this.continuousBatchSize !== null) {
+      const totalCost = gs.nextGachaCost() * this.continuousBatchSize;
+      if (gs.diamonds < totalCost) {
+        this.continuousBatchSize = null; // 다이아 부족하면 자동 정지
+        this.render();
+      } else {
+        this.continuousAccumulatorMs += 250;
+        if (this.continuousAccumulatorMs >= 1100) {
+          this.continuousAccumulatorMs = 0;
+          const results = gs.pullDealerMultiple(this.continuousBatchSize);
+          if (results.length > 0 && !gs.skipGachaAnimation) this.gachaReveal = results;
+          gs.save();
+          this.render();
+        }
+      }
+    }
+
     const cashEl = this.root.querySelector('#hud-cash');
     if (cashEl) cashEl.textContent = `💰 ${formatCash(gs.cash)}`;
     const incomeEl = this.root.querySelector('#hud-income');
@@ -96,6 +116,23 @@ export class HUD {
 
   private onClick(e: Event) {
     const target = e.target as HTMLElement;
+
+    // 팝업(job-modal) 바깥의 어두운 배경을 직접 눌렀을 때 닫기. 전직 선택처럼 반드시
+    // 응답해야 하는 모달(닫기 버튼이 없음)은 배경 클릭으로 닫히지 않게 자연히 제외됨.
+    if (target.classList.contains('job-modal')) {
+      if (this.gachaReveal) {
+        this.gachaReveal = null;
+        this.render();
+      } else if (this.welcomeBack) {
+        this.welcomeBack = null;
+        this.render();
+      } else if (this.settingsOpen) {
+        this.settingsOpen = false;
+        this.render();
+      }
+      return;
+    }
+
     const btn = target.closest<HTMLElement>('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
@@ -184,6 +221,13 @@ export class HUD {
         return;
       case 'pull-gacha': {
         const count = Number(btn.dataset.count ?? 1);
+        if (this.gameState.autoPullEnabled) {
+          // 연속 뽑기 모드: 같은 횟수 버튼을 다시 누르면 정지, 다른 버튼을 누르면 그 횟수로 전환.
+          this.continuousBatchSize = this.continuousBatchSize === count ? null : count;
+          this.continuousAccumulatorMs = 0;
+          this.render();
+          return;
+        }
         const results = this.gameState.pullDealerMultiple(count);
         if (results.length > 0) {
           if (!this.gameState.skipGachaAnimation) this.gachaReveal = results;
@@ -201,8 +245,13 @@ export class HUD {
         break;
       case 'toggle-auto-pull':
         this.gameState.toggleAutoPull();
+        if (!this.gameState.autoPullEnabled) this.continuousBatchSize = null; // 모드 끄면 진행 중인 반복도 정지
         changed = true;
         break;
+      case 'stop-continuous-pull':
+        this.continuousBatchSize = null;
+        this.render();
+        return;
     }
     if (changed) {
       this.gameState.save();
@@ -390,8 +439,10 @@ export class HUD {
 
     const pullBtn = (count: number, label: string) => {
       const total = cost * count;
-      return `<button class="big-action gacha" data-action="pull-gacha" data-count="${count}" data-diamond-cost="${total}" ${gs.diamonds < total ? 'disabled' : ''}>
-        ${label} (💎${total})
+      const isLooping = this.continuousBatchSize === count;
+      const diamondAttr = isLooping ? '' : `data-diamond-cost="${total}"`;
+      return `<button class="big-action gacha ${isLooping ? 'looping' : ''}" data-action="pull-gacha" data-count="${count}" ${diamondAttr} ${gs.diamonds < total && !isLooping ? 'disabled' : ''}>
+        ${isLooping ? `⏸ 반복 중 (${label})` : `${label} (💎${total})`}
       </button>`;
     };
 
@@ -409,6 +460,11 @@ export class HUD {
         ${pullBtn(30, '30회 뽑기')}
         ${pullBtn(100, '100회 뽑기')}
       </div>
+      ${
+        this.continuousBatchSize !== null
+          ? `<button class="big-action stop-continuous" data-action="stop-continuous-pull">⏹ 연속 뽑기 정지 (${this.continuousBatchSize}회 반복 중)</button>`
+          : ''
+      }
       <button class="big-action auto-assign" data-action="auto-assign-dealers" ${gs.dealers.length === 0 ? 'disabled' : ''}>
         🎯 딜러 자동배치 (좋은 딜러 → 좋은 테이블)
       </button>

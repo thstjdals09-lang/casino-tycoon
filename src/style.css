@@ -512,6 +512,28 @@ select {
   padding: 9px 4px;
 }
 
+.big-action.gacha.looping {
+  background: linear-gradient(180deg, #ff5c5c, #b02a2a);
+  border-color: #7a1a1a;
+  animation: looping-pulse 1s ease-in-out infinite;
+}
+
+.big-action.stop-continuous {
+  background: linear-gradient(180deg, #6b1e2b, #4a1420);
+  border-color: #3a0f16;
+  color: #ffb3b3;
+}
+
+@keyframes looping-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .gacha-reveal-inner {
   max-width: 480px;
   max-height: 80vh;

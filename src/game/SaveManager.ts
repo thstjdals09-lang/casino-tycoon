@@ -4,6 +4,10 @@ import { emptyPullCounts } from './achievements';
 const STORAGE_KEY = 'casino-tycoon-save-v14';
 export const SAVE_VERSION = 14;
 
+/** 밸런스/컨텐츠 대격변 패치를 배포할 때마다 올린다 — 클라우드 세이브에 저장된 값이
+ * 이보다 낮으면 hydrateFromCloud()가 병합하지 않고 전체 계정을 강제로 새로 시작시킨다. */
+export const CONTENT_PATCH_VERSION = 2;
+
 function emptyMissionSet() {
   return { chat: 0, pull: 0, upgrade: 0 };
 }
@@ -44,6 +48,7 @@ export function createNewSave(defaultVenueName = ''): GameSaveData {
     diamonds: 0,
     skipGachaAnimation: false,
     autoPullEnabled: false,
+    contentPatchVersion: CONTENT_PATCH_VERSION,
   };
 }
 

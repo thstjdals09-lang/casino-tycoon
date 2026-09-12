@@ -97,4 +97,7 @@ export interface GameSaveData {
   skipGachaAnimation: boolean;
   /** 켜두면 다이아가 있는 동안 자동으로(조용히, 연출 없이) 계속 가챠를 돌림. */
   autoPullEnabled: boolean;
+  /** 밸런스/컨텐츠가 크게 바뀌는 패치 때 전체 계정을 강제로 초기화하기 위한 마커.
+   * 클라우드 세이브의 값이 CONTENT_PATCH_VERSION보다 낮으면 병합하지 않고 완전히 새로 시작한다. */
+  contentPatchVersion: number;
 }
