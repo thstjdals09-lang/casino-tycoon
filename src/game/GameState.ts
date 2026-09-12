@@ -1,12 +1,14 @@
 import type { DealerInstance, GameSaveData, TableInstance, VenueTierConfig } from './types';
 import { collectionMultiplier, costForNth, dealerMultiplier, isFinalTier, tableLevelMultiplier, tierOf } from './balance';
-import { createNewSave, loadSave, persistSave, resetSave } from './SaveManager';
+import { createNewSave, loadSave, persistSave, resetSave, SAVE_VERSION } from './SaveManager';
 import { rollGrade, type DealerGrade } from './gacha';
 import { computeJobMultipliers, pendingJobChoices, type JobConfig, type JobMultipliers } from './jobs';
 import { achievementMultiplier, checkNewAchievements, type AchievementConfig, ACHIEVEMENTS, type DealerPullCounts } from './achievements';
 import { customerGradeConfig, rollCustomerGrades, SEATS_PER_TABLE, type CustomerGrade } from './customers';
 import { barIncomePerSecond, barUpgradeCost, barVisualTier, designBonusFor, designUpgradeCost, drinkPriceFor, unlockedDrinks } from './decor';
 import { rollTemplate, templateById, starLevelFor, starMultiplierFor, isMaxStars, STAR_CONFIG, type SpecialtyType } from './dealerRoster';
+import { getCurrentUid } from './account';
+import { loadCloudSave, saveCloudSave } from './cloudSave';
 
 const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000; // 오프라인 수익은 최대 8시간까지만 인정
 const TAP_COOLDOWN_MS = 2000;
@@ -572,6 +574,27 @@ export class GameState {
     if (this.autoSaveDisabled) return;
     this.data.lastSavedAt = Date.now();
     persistSave(this.data);
+    const uid = getCurrentUid();
+    if (uid) void saveCloudSave(uid, this.data);
+  }
+
+  /**
+   * 로그인한 계정의 클라우드 세이브로 현재 상태를 덮어쓴다. 게임을 시작하기 전
+   * (Phaser/HUD 초기화 이전에) 반드시 한 번 호출해서 "계정 = 진행상황"이 되게 한다.
+   * 이 계정의 클라우드 세이브가 아직 없으면(신규 계정), 이 브라우저에 다른 계정이
+   * 남겨뒀을 수도 있는 로컬 데이터를 물려받지 않도록 새 세이브로 시작해서 올려둔다.
+   */
+  async hydrateFromCloud(): Promise<void> {
+    const uid = getCurrentUid();
+    if (!uid) return;
+    const cloud = await loadCloudSave(uid);
+    if (cloud && cloud.version === SAVE_VERSION) {
+      this.data = cloud;
+    } else {
+      this.data = createNewSave();
+      await saveCloudSave(uid, this.data);
+    }
+    persistSave(this.data);
   }
 
   /**
@@ -581,5 +604,7 @@ export class GameState {
   resetGame(): void {
     this.autoSaveDisabled = true;
     resetSave();
+    const uid = getCurrentUid();
+    if (uid) void saveCloudSave(uid, createNewSave());
   }
 }

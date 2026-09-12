@@ -2,7 +2,7 @@ import type { GameSaveData } from './types';
 import { emptyPullCounts } from './achievements';
 
 const STORAGE_KEY = 'casino-tycoon-save-v9';
-const SAVE_VERSION = 9;
+export const SAVE_VERSION = 9;
 
 export function createNewSave(): GameSaveData {
   return {
